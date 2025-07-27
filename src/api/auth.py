@@ -13,8 +13,7 @@ from dotenv import load_dotenv
 from src.core.config import settings
 from src.database.connection import get_db
 from src.database.models import User, Subscription
-from src.schemas.auth import TokenData
-from src.schemas.user import User as UserSchema
+from src.api.schemas import TokenData, User as UserSchema
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()

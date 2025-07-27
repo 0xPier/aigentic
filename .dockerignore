@@ -4,19 +4,22 @@
 .gitattributes
 
 # Python
-__pycache__
+__pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
 *.py[cod]
 *$py.class
-.pytest_cache
+.pytest_cache/
 .coverage
 htmlcov/
 .env
-.venv
+.env.*
+!.env.example
 venv/
+.venv/
+test-env/
 ENV/
 
 # Node
@@ -36,21 +39,35 @@ yarn-error.log
 uploads/
 logs/
 *.log
+*.log.*
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+.env.backup
+env.template
 
 # Docker
 .docker/
 docker-compose.override.yml
 
 # Documentation
-docs/
-*.md
+# We want to keep some markdown files like README.md
+# docs/
+# *.md
 LICENSE
 
 # Test files
 tests/
 test/
-testing/ 
+testing/
+pytest.ini
+
+# Scripts
+*.sh
+create_admin.py
+
+# Other
+alembic.ini
+logfile
+.DS_Store 
