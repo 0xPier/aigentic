@@ -1,0 +1,64 @@
+# Core Framework
+fastapi==0.115.9
+uvicorn[standard]==0.32.0
+pydantic==2.9.2
+pydantic-settings==2.7.1
+python-multipart==0.0.6
+python-decouple==3.8
+
+# Database
+sqlalchemy==2.0.35
+alembic==1.13.1
+psycopg2-binary==2.9.9
+
+# Authentication & Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+email-validator==2.1.1
+
+# Multi-Agent Framework
+crewai==0.148.0
+openai==1.97.0
+
+# Async Processing
+celery==5.4.0
+redis==5.0.7
+celery-redbeat==2.2.0
+
+# Data Processing & Analysis
+pandas==2.2.3
+numpy==1.25.2
+matplotlib==3.8.2
+seaborn==0.13.0
+nltk==3.8.1
+
+# Social Media Integrations
+tweepy==4.14.0
+python-telegram-bot==22.3  # Updated for httpx compatibility
+
+# Content Generation
+Pillow==10.1.0
+python-pptx==0.6.23
+reportlab==4.0.7
+fpdf2==2.7.6
+
+# Web Scraping & Research
+requests==2.31.0
+beautifulsoup4==4.12.2
+selenium==4.16.0
+webdriver-manager==4.0.1
+
+# Image Generation
+stability-sdk==0.8.6
+diffusers==0.24.0
+
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+# httpx version resolved by dependencies
+
+# Development
+black==23.11.0
+flake8==6.1.0
+pre-commit==3.6.0
