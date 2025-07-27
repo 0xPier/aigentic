@@ -7,7 +7,8 @@ This guide provides comprehensive instructions for deploying the AI Consultancy 
 ### Prerequisites
 
 - Docker 20.10+ and Docker Compose 2.0+
-- At least 4GB RAM and 10GB disk space
+- At least 8GB RAM and 20GB disk space
+- Git
 - OpenAI API key (required)
 - Optional: Twitter/X, Telegram, Stability AI API keys
 
@@ -36,11 +37,8 @@ nano .env
 ### 3. Deploy
 
 ```bash
-# Make scripts executable
-chmod +x scripts/*.sh
-
 # Deploy the platform
-./scripts/deploy.sh
+docker-compose up -d --build
 ```
 
 ### 4. Access the Platform
@@ -49,38 +47,12 @@ chmod +x scripts/*.sh
 - **Backend API**: http://localhost:8000
 - **API Documentation**: http://localhost:8000/docs
 
-## 📋 Deployment Options
-
-### Production Deployment
-
-```bash
-# Full production deployment with monitoring
-./scripts/deploy.sh --with-monitoring
-
-# Access monitoring
-# Grafana: http://localhost:3001 (admin/admin)
-# Prometheus: http://localhost:9090
-```
-
-### Development Deployment
-
-```bash
-# Start development environment with hot reload
-./scripts/manage.sh start dev
-
-# Run tests
-./scripts/manage.sh test
-
-# View logs
-./scripts/manage.sh logs backend
-```
-
 ## 🏗️ Architecture
 
 ### Services Overview
 
 | Service | Purpose | Port | Health Check |
-|---------|---------|------|--------------|
+|---|---|---|---|
 | `postgres` | PostgreSQL database | 5432 | `pg_isready` |
 | `redis` | Celery broker/cache | 6379 | `redis-cli ping` |
 | `backend` | FastAPI application | 8000 | `/health` endpoint |
@@ -88,75 +60,52 @@ chmod +x scripts/*.sh
 | `celery_beat` | Task scheduler | - | Process monitoring |
 | `frontend` | React application | 3000 | HTTP response |
 | `nginx` | Reverse proxy | 80/443 | HTTP response |
+| `prometheus` | Metrics collection | 9090 | `monitoring` profile |
+| `grafana` | Metrics visualization | 3001 | `monitoring` profile |
 
-### Optional Services
-
-| Service | Purpose | Port | Profile |
-|---------|---------|------|---------|
-| `prometheus` | Metrics collection | 9090 | `monitoring` |
-| `grafana` | Metrics visualization | 3001 | `monitoring` |
 
 ## 🔧 Management Commands
 
 ### Service Management
 
 ```bash
-# Start services
-./scripts/manage.sh start [dev|prod]
+# Start services in production mode
+docker-compose up -d
+
+# Start services in development mode
+docker-compose -f docker-compose.dev.yml up -d
 
 # Stop services
-./scripts/manage.sh stop
+docker-compose down
 
 # Restart services
-./scripts/manage.sh restart [service-name]
+docker-compose restart [service-name]
 
 # View service status
-./scripts/manage.sh status
-
-# Check service health
-./scripts/manage.sh health
+docker-compose ps
 ```
 
 ### Development Tools
 
 ```bash
 # View logs
-./scripts/manage.sh logs [service-name]
+docker-compose logs -f [service-name]
 
 # Open shell in container
-./scripts/manage.sh shell backend
+docker-compose exec backend /bin/bash
 
 # Run tests
-./scripts/manage.sh test
-
-# Build images
-./scripts/manage.sh build
+docker-compose exec backend pytest
 ```
 
 ### Database Management
 
 ```bash
 # Run migrations
-./scripts/manage.sh db-migrate
+docker-compose exec backend alembic upgrade head
 
 # Reset database (WARNING: destroys data)
-./scripts/manage.sh db-reset
-
-# Backup database
-./scripts/manage.sh backup
-
-# Restore database
-./scripts/manage.sh restore backup_file.sql
-```
-
-### Maintenance
-
-```bash
-# Clean up containers and images
-./scripts/manage.sh clean
-
-# View help
-./scripts/manage.sh help
+docker-compose down -v --rmi all
 ```
 
 ## 🔐 Security Configuration
@@ -182,115 +131,40 @@ ALLOWED_HOSTS=yourdomain.com,app.yourdomain.com
 
 ### SSL/HTTPS Setup
 
-1. **Obtain SSL certificates:**
-```bash
-# Using Let's Encrypt (recommended)
-certbot certonly --standalone -d yourdomain.com
-```
+1.  **Obtain SSL certificates:** Use Let's Encrypt or another provider.
+2.  **Configure SSL in nginx:** Update `nginx/nginx.conf` with your certificate paths.
+3.  **Update environment:** Set `SSL_CERT_PATH` and `SSL_KEY_PATH` in your `.env` file.
 
-2. **Configure SSL in nginx:**
-```bash
-# Copy certificates
-cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem nginx/ssl/cert.pem
-cp /etc/letsencrypt/live/yourdomain.com/privkey.pem nginx/ssl/key.pem
-
-# Update nginx configuration
-# Uncomment HTTPS server block in nginx/nginx.conf
-```
-
-3. **Update environment:**
-```env
-SSL_CERT_PATH=/etc/nginx/ssl/cert.pem
-SSL_KEY_PATH=/etc/nginx/ssl/key.pem
-```
 
 ## 📊 Monitoring and Observability
 
-### Prometheus Metrics
-
-The platform exposes metrics for:
-- API request rates and latencies
-- Database connection pools
-- Celery task execution
-- Agent performance metrics
-- Memory usage and learning analytics
-
-### Grafana Dashboards
-
-Pre-configured dashboards for:
-- Application performance monitoring
-- Infrastructure metrics
-- Business metrics (task completion rates, user engagement)
-- Agent performance and learning trends
-
-### Log Management
+The platform exposes metrics for Prometheus and includes pre-configured Grafana dashboards. To enable monitoring:
 
 ```bash
-# View real-time logs
-docker-compose logs -f
-
-# View specific service logs
-docker-compose logs -f backend
-
-# Log files location
-./logs/
-├── backend.log
-├── celery.log
-└── nginx/
-    ├── access.log
-    └── error.log
+docker-compose --profile monitoring up -d
 ```
+
+- **Grafana**: `http://localhost:3001` (admin/admin)
+- **Prometheus**: `http://localhost:9090`
+
 
 ## 🔄 Backup and Recovery
-
-### Automated Backups
-
-```bash
-# Setup automated daily backups
-crontab -e
-
-# Add this line for daily backups at 2 AM
-0 2 * * * cd /path/to/agentic-framework && ./scripts/manage.sh backup
-```
 
 ### Manual Backup
 
 ```bash
 # Create backup
-./scripts/manage.sh backup
-
-# Backup with custom name
-docker-compose exec -T postgres pg_dump -U postgres agentic_platform > custom_backup.sql
+docker-compose exec -T postgres pg_dump -U postgres agentic_platform > backup_$(date +%Y%m%d_%H%M%S).sql
 ```
 
 ### Recovery
 
 ```bash
 # Restore from backup
-./scripts/manage.sh restore backup_20240121_020000.sql
-
-# Full disaster recovery
-./scripts/deploy.sh
-./scripts/manage.sh restore latest_backup.sql
+docker-compose exec -T postgres psql -U postgres agentic_platform < backup_file.sql
 ```
 
-## 🚀 Production Deployment
-
-### Server Requirements
-
-**Minimum:**
-- 2 CPU cores
-- 4GB RAM
-- 20GB SSD storage
-- Ubuntu 20.04+ or similar
-
-**Recommended:**
-- 4+ CPU cores
-- 8GB+ RAM
-- 50GB+ SSD storage
-- Load balancer for high availability
-
-### Production Checklist
+## 🚀 Production Deployment Checklist
 
 - [ ] Configure SSL certificates
 - [ ] Set secure environment variables
@@ -300,131 +174,15 @@ docker-compose exec -T postgres pg_dump -U postgres agentic_platform > custom_ba
 - [ ] Test disaster recovery procedures
 - [ ] Setup log rotation
 - [ ] Configure rate limiting
-- [ ] Setup health checks
-- [ ] Configure auto-scaling (if using cloud)
-
-### Cloud Deployment
-
-#### AWS ECS/Fargate
-```bash
-# Build and push images to ECR
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <account>.dkr.ecr.us-east-1.amazonaws.com
-docker build -t agentic-backend -f Dockerfile.backend .
-docker tag agentic-backend:latest <account>.dkr.ecr.us-east-1.amazonaws.com/agentic-backend:latest
-docker push <account>.dkr.ecr.us-east-1.amazonaws.com/agentic-backend:latest
-```
-
-#### Google Cloud Run
-```bash
-# Deploy to Cloud Run
-gcloud run deploy agentic-backend --image gcr.io/project-id/agentic-backend --platform managed
-```
-
-#### Azure Container Instances
-```bash
-# Deploy to Azure
-az container create --resource-group myResourceGroup --name agentic-platform --image myregistry.azurecr.io/agentic-backend
-```
 
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
-**Services won't start:**
-```bash
-# Check Docker daemon
-sudo systemctl status docker
-
-# Check logs
-docker-compose logs
-
-# Rebuild images
-./scripts/manage.sh build
-```
-
-**Database connection errors:**
-```bash
-# Check database health
-./scripts/manage.sh health
-
-# Reset database
-./scripts/manage.sh db-reset
-```
-
-**API key errors:**
-```bash
-# Verify environment variables
-docker-compose exec backend env | grep API_KEY
-
-# Update .env file and restart
-./scripts/manage.sh restart backend
-```
-
-### Performance Issues
-
-**High memory usage:**
-```bash
-# Check resource usage
-docker stats
-
-# Reduce Celery workers
-# Edit docker-compose.yml: --concurrency=2
-```
-
-**Slow API responses:**
-```bash
-# Check backend logs
-./scripts/manage.sh logs backend
-
-# Monitor metrics
-# Access Grafana at http://localhost:3001
-```
-
-### Log Analysis
-
-```bash
-# Search for errors
-./scripts/manage.sh logs backend | grep ERROR
-
-# Monitor real-time logs
-./scripts/manage.sh logs -f
-
-# Check specific timeframe
-docker-compose logs --since="2024-01-21T10:00:00" backend
-```
-
-## 📞 Support
-
-For deployment issues:
-1. Check the troubleshooting section above
-2. Review service logs: `./scripts/manage.sh logs`
-3. Verify environment configuration
-4. Check system requirements
-
-## 🔄 Updates and Maintenance
-
-### Updating the Platform
-
-```bash
-# Pull latest changes
-git pull origin main
-
-# Rebuild and redeploy
-./scripts/deploy.sh
-
-# Run any new migrations
-./scripts/manage.sh db-migrate
-```
-
-### Regular Maintenance
-
-- **Weekly**: Review logs and performance metrics
-- **Monthly**: Update dependencies and security patches
-- **Quarterly**: Review and rotate API keys and secrets
-- **Annually**: Update SSL certificates
+-   **Services won't start:** Check `docker-compose logs` for errors.
+-   **Database connection errors:** Verify `DATABASE_URL` and that the `postgres` container is healthy.
+-   **API key errors:** Ensure API keys in `.env` are correct and the `backend` service was restarted after changes.
 
 ---
 
 **🎉 Your AI Consultancy Platform is now ready for production!**
-
-Access your platform at the configured URLs and start leveraging the power of AI-driven consultancy automation.
