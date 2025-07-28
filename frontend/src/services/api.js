@@ -44,8 +44,9 @@ api.interceptors.response.use(
             refresh_token: refreshToken
           });
           
-          const { access_token, expires_in } = response.data;
+          const { access_token, refresh_token: new_refresh_token, expires_in } = response.data;
           localStorage.setItem('token', access_token);
+          localStorage.setItem('refresh_token', new_refresh_token);
           localStorage.setItem('token_expires_at', Date.now() + (expires_in * 1000));
           
           // Retry original request with new token
@@ -82,6 +83,14 @@ export const authAPI = {
   refreshToken: (refreshToken) => api.post('/auth/refresh', { refresh_token: refreshToken }),
   logout: () => api.post('/auth/logout'),
   getCurrentUser: () => api.get('/users/me'),
+};
+
+// Admin API
+export const adminAPI = {
+  createUser: (userData) => api.post('/admin/create-user', userData),
+  getUsers: (params = {}) => api.get('/admin/users/', { params }),
+  demoLogin: () => api.post('/admin/demo-login'),
+  devLogin: () => api.post('/admin/dev-login'),
 };
 
 // Users API

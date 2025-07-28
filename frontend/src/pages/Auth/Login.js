@@ -43,16 +43,40 @@ function Login() {
       const { access_token, refresh_token, user } = response.data;
       
       // Store tokens
-      localStorage.setItem('access_token', access_token);
+      localStorage.setItem('token', access_token);
       localStorage.setItem('refresh_token', refresh_token);
       
-      // Update auth context
-      login(user);
-      
-      navigate('/dashboard');
+      // Update auth context directly
+      const result = await login('admin', 'admin123');
+      if (result.success) {
+        navigate('/dashboard');
+      } else {
+        setError('Development login failed');
+      }
     } catch (err) {
       setError('Development login failed. Make sure the backend is running in development mode.');
       console.error('Dev login error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDemoLogin = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      // Use the standard login flow for demo user
+      const result = await login('demo', 'demo123');
+      
+      if (result.success) {
+        navigate('/dashboard');
+      } else {
+        setError(result.error || 'Demo login failed');
+      }
+    } catch (err) {
+      setError('Demo login failed. Please try again.');
+      console.error('Demo login error:', err);
     } finally {
       setLoading(false);
     }
@@ -162,23 +186,40 @@ function Login() {
                 {loading ? <CircularProgress size={24} /> : 'Sign In'}
               </Button>
 
+              {/* Demo Login Button */}
+              <Box sx={{ mt: 2 }}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  onClick={handleDemoLogin}
+                  disabled={loading}
+                  sx={{ mb: 1 }}
+                >
+                  {loading ? <CircularProgress size={24} /> : 'Demo Login'}
+                </Button>
+                <Typography variant="body2" color="text.secondary" align="center">
+                  Username: demo, Password: demo123
+                </Typography>
+              </Box>
+
+              {/* Development only - Admin bypass */}
               {isDev && (
-                <>
-                  <Divider sx={{ my: 2 }}>OR</Divider>
+                <Box sx={{ mt: 2 }}>
+                  <Divider sx={{ my: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Development Only
+                    </Typography>
+                  </Divider>
                   <Button
                     fullWidth
                     variant="outlined"
-                    color="secondary"
+                    color="warning"
                     onClick={handleDevLogin}
                     disabled={loading}
-                    sx={{ mb: 2 }}
                   >
-                    {loading ? <CircularProgress size={24} /> : 'Development Login'}
+                    Admin Bypass Login
                   </Button>
-                  <Typography variant="caption" color="textSecondary" align="center">
-                    Development mode only - bypasses authentication
-                  </Typography>
-                </>
+                </Box>
               )}
 
               <Divider sx={{ my: 2 }} />
@@ -203,7 +244,7 @@ function Login() {
             Demo Credentials:
           </Typography>
           <Typography variant="body2" component="div">
-            <strong>Username:</strong> demo_user
+            <strong>Username:</strong> demo
           </Typography>
           <Typography variant="body2" component="div">
             <strong>Password:</strong> demo123

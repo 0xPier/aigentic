@@ -39,6 +39,7 @@ export const AuthProvider = ({ children }) => {
       // Clear all auth data
       localStorage.removeItem('token');
       localStorage.removeItem('refresh_token');
+      localStorage.removeItem('token_expires_at');
       delete axios.defaults.headers.common['Authorization'];
       setUser(null);
       setToken(null);
@@ -52,13 +53,15 @@ export const AuthProvider = ({ children }) => {
         throw new Error('No refresh token available');
       }
 
-      const response = await axios.post('/api/auth/refresh-token', {
+      const response = await axios.post('/api/auth/refresh', {
         refresh_token,
       });
-      const { access_token, expires_in } = response.data;
+      const { access_token, refresh_token: new_refresh_token, expires_in } = response.data;
       
       localStorage.setItem('token', access_token);
+      localStorage.setItem('refresh_token', new_refresh_token);
       localStorage.setItem('token_expires_at', Date.now() + (expires_in * 1000));
+      setToken(access_token);
       
       return true;
     } catch (error) {
@@ -68,7 +71,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const checkTokenExpiry = async () => {
+  const checkTokenExpiry = useCallback(async () => {
     const token = localStorage.getItem('token');
     const expiresAt = localStorage.getItem('token_expires_at');
     
@@ -83,69 +86,61 @@ export const AuthProvider = ({ children }) => {
     }
     
     return true;
-  };
+  }, [refreshToken]);
 
-  const loadUser = useCallback(async () => {
-    const token = localStorage.getItem('token');
-    if (token && !user) {
+  // Single effect to handle initial authentication check
+  useEffect(() => {
+    const initializeAuth = async () => {
+      const storedToken = localStorage.getItem('token');
+      
+      if (!storedToken) {
+        setLoading(false);
+        return;
+      }
+
+      // If using dev token, set mock user
+      if (storedToken === 'dev_admin_token') {
+        setUser({
+          id: 1,
+          username: 'admin',
+          email: 'admin@example.com',
+          full_name: 'Admin User',
+          is_active: true,
+          is_verified: true,
+          subscription_tier: 'enterprise',
+          role: 'admin'
+        });
+        setToken(storedToken);
+        setLoading(false);
+        return;
+      }
+      
+      // Normal auth check
       try {
         const response = await authAPI.getCurrentUser();
         setUser(response.data);
+        setToken(storedToken);
       } catch (error) {
-        console.error('Failed to load user:', error);
+        console.error('Auth check failed:', error);
         logout();
+      } finally {
+        setLoading(false);
       }
-    }
-    setLoading(false);
-  }, [user, logout]);
+    };
 
-  // Check for existing token on mount and set up token refresh
+    initializeAuth();
+  }, [logout]);
+
+  // Set up periodic token refresh check
   useEffect(() => {
-    loadUser();
+    if (!user) return;
 
-    // Set up periodic token refresh check (every 5 minutes)
     const tokenCheckInterval = setInterval(() => {
-      if (user) {
-        checkTokenExpiry();
-      }
+      checkTokenExpiry();
     }, 5 * 60 * 1000);
 
     return () => clearInterval(tokenCheckInterval);
-  }, [loadUser, user, checkTokenExpiry]);
-
-  // Check if user is authenticated on app load
-  useEffect(() => {
-    const checkAuth = async () => {
-      if (token) {
-        // If using dev token, set mock user
-        if (token === 'dev_admin_token') {
-          setUser({
-            id: 1,
-            username: 'admin',
-            email: 'admin@example.com',
-            full_name: 'Admin User',
-            is_active: true,
-            is_verified: true,
-            subscription_tier: 'enterprise'
-          });
-          setLoading(false);
-          return;
-        }
-        
-        // Normal auth check
-        try {
-          const response = await axios.get('/api/users/me');
-          setUser(response.data);
-        } catch (error) {
-          console.error('Auth check failed:', error);
-          logout();
-        }
-      }
-      setLoading(false);
-    };
-
-    checkAuth();
-  }, [token, logout]);
+  }, [user, checkTokenExpiry]);
 
   const login = async (username, password) => {
     try {
@@ -178,7 +173,8 @@ export const AuthProvider = ({ children }) => {
             full_name: 'Admin User',
             is_active: true,
             is_verified: true,
-            subscription_tier: 'enterprise'
+            subscription_tier: 'enterprise',
+            role: 'admin'
           } 
         };
       } else {

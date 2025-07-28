@@ -24,6 +24,8 @@ import {
   DialogContent,
   DialogActions,
   Chip,
+  Container,
+  CircularProgress,
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -37,6 +39,7 @@ import { useForm, Controller } from 'react-hook-form';
 
 import { useAuth } from '../../contexts/AuthContext';
 import { usersAPI, fetchIntegrations, integrationsAPI } from '../../services/api';
+import { adminAPI } from '../../services/api';
 
 function ProfileSettings() {
   const { user } = useAuth();
@@ -408,61 +411,155 @@ function IntegrationsSettings() {
 }
 
 function Settings() {
-  const [notifications, setNotifications] = useState(true);
-  const [emailUpdates, setEmailUpdates] = useState(false);
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState('');
+  const [error, setError] = useState('');
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm();
+
+  const isAdmin = user?.role === 'admin';
+
+  const onCreateUser = async (data) => {
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      await adminAPI.createUser(data);
+      setSuccess(`User ${data.username} created successfully!`);
+      reset();
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to create user');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <Box>
-      <Typography variant="h4" gutterBottom>
-        Settings
-      </Typography>
+    <Container maxWidth="md">
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h4" gutterBottom>
+          Settings
+        </Typography>
 
-      <Grid container spacing={3}>
-        <Grid item xs={12}>
-          <ProfileSettings />
-        </Grid>
+        {/* User Info */}
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            User Information
+          </Typography>
+          <Typography><strong>Username:</strong> {user?.username}</Typography>
+          <Typography><strong>Email:</strong> {user?.email}</Typography>
+          <Typography><strong>Full Name:</strong> {user?.full_name}</Typography>
+          <Typography><strong>Role:</strong> {user?.role}</Typography>
+          <Typography><strong>Subscription:</strong> {user?.subscription_tier}</Typography>
+        </Paper>
 
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Preferences
-              </Typography>
-              <List>
-                <ListItem>
-                  <ListItemText
-                    primary="Push Notifications"
-                    secondary="Receive notifications for task completions and updates"
-                  />
-                  <ListItemSecondaryAction>
-                    <Switch
-                      checked={notifications}
-                      onChange={(e) => setNotifications(e.target.checked)}
-                    />
-                  </ListItemSecondaryAction>
-                </ListItem>
-                <ListItem>
-                  <ListItemText
-                    primary="Email Updates"
-                    secondary="Receive weekly summary emails"
-                  />
-                  <ListItemSecondaryAction>
-                    <Switch
-                      checked={emailUpdates}
-                      onChange={(e) => setEmailUpdates(e.target.checked)}
-                    />
-                  </ListItemSecondaryAction>
-                </ListItem>
-              </List>
-            </CardContent>
-          </Card>
-        </Grid>
+        {/* Admin Functions */}
+        {isAdmin && (
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" gutterBottom>
+              Admin Functions
+            </Typography>
+            <Divider sx={{ mb: 3 }} />
 
-        <Grid item xs={12}>
-          <IntegrationsSettings />
-        </Grid>
-      </Grid>
-    </Box>
+            <Typography variant="subtitle1" gutterBottom>
+              Create New User
+            </Typography>
+
+            {success && (
+              <Alert severity="success" sx={{ mb: 2 }}>
+                {success}
+              </Alert>
+            )}
+
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+            )}
+
+            <Box
+              component="form"
+              onSubmit={handleSubmit(onCreateUser)}
+              sx={{ mt: 2 }}
+            >
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                label="Username"
+                error={!!errors.username}
+                helperText={errors.username?.message}
+                {...register('username', {
+                  required: 'Username is required',
+                  minLength: {
+                    value: 3,
+                    message: 'Username must be at least 3 characters',
+                  },
+                })}
+              />
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                label="Email"
+                type="email"
+                error={!!errors.email}
+                helperText={errors.email?.message}
+                {...register('email', {
+                  required: 'Email is required',
+                  pattern: {
+                    value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                    message: 'Invalid email address',
+                  },
+                })}
+              />
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                label="Full Name"
+                error={!!errors.full_name}
+                helperText={errors.full_name?.message}
+                {...register('full_name', {
+                  required: 'Full name is required',
+                })}
+              />
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                label="Password"
+                type="password"
+                error={!!errors.password}
+                helperText={errors.password?.message}
+                {...register('password', {
+                  required: 'Password is required',
+                  minLength: {
+                    value: 8,
+                    message: 'Password must be at least 8 characters',
+                  },
+                })}
+              />
+              <Button
+                type="submit"
+                variant="contained"
+                sx={{ mt: 2 }}
+                disabled={loading}
+              >
+                {loading ? <CircularProgress size={24} /> : 'Create User'}
+              </Button>
+            </Box>
+          </Paper>
+        )}
+      </Box>
+    </Container>
   );
 }
 
