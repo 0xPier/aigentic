@@ -26,6 +26,65 @@ export const AuthProvider = ({ children }) => {
     }
   }, [token]);
 
+  // Define logout first to avoid circular dependency
+  const logout = useCallback(async () => {
+    try {
+      // Call logout endpoint if token exists
+      if (localStorage.getItem('token')) {
+        await authAPI.logout();
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // Clear all auth data
+      localStorage.removeItem('token');
+      localStorage.removeItem('refresh_token');
+      delete axios.defaults.headers.common['Authorization'];
+      setUser(null);
+      setToken(null);
+    }
+  }, []);
+
+  const refreshToken = async () => {
+    try {
+      const refresh_token = localStorage.getItem('refresh_token');
+      if (!refresh_token) {
+        throw new Error('No refresh token available');
+      }
+
+      const response = await axios.post('/api/auth/refresh-token', {
+        refresh_token,
+      });
+      const { access_token, expires_in } = response.data;
+      
+      localStorage.setItem('token', access_token);
+      localStorage.setItem('token_expires_at', Date.now() + (expires_in * 1000));
+      
+      return true;
+    } catch (error) {
+      // Refresh failed, logout user
+      logout();
+      return false;
+    }
+  };
+
+  const checkTokenExpiry = async () => {
+    const token = localStorage.getItem('token');
+    const expiresAt = localStorage.getItem('token_expires_at');
+    
+    if (!token || !expiresAt) {
+      return false;
+    }
+    
+    // Check if token expires in the next 5 minutes
+    const fiveMinutesFromNow = Date.now() + (5 * 60 * 1000);
+    if (parseInt(expiresAt) < fiveMinutesFromNow) {
+      return await refreshToken();
+    }
+    
+    return true;
+  };
+
   const loadUser = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (token && !user) {
@@ -52,7 +111,7 @@ export const AuthProvider = ({ children }) => {
     }, 5 * 60 * 1000);
 
     return () => clearInterval(tokenCheckInterval);
-  }, [loadUser, user]);
+  }, [loadUser, user, checkTokenExpiry]);
 
   // Check if user is authenticated on app load
   useEffect(() => {
@@ -86,7 +145,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     checkAuth();
-  }, [token]);
+  }, [token, logout]);
 
   const login = async (username, password) => {
     try {
@@ -153,64 +212,6 @@ export const AuthProvider = ({ children }) => {
         error: error.response?.data?.detail || 'Registration failed',
       };
     }
-  };
-
-  const logout = useCallback(async () => {
-    try {
-      // Call logout endpoint if token exists
-      if (localStorage.getItem('token')) {
-        await authAPI.logout();
-      }
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      // Clear all auth data
-      localStorage.removeItem('token');
-      localStorage.removeItem('refresh_token');
-      delete axios.defaults.headers.common['Authorization'];
-      setUser(null);
-      setToken(null);
-    }
-  }, []);
-
-  const refreshToken = async () => {
-    try {
-      const refresh_token = localStorage.getItem('refresh_token');
-      if (!refresh_token) {
-        throw new Error('No refresh token available');
-      }
-
-      const response = await axios.post('/api/auth/refresh-token', {
-        refresh_token,
-      });
-      const { access_token, expires_in } = response.data;
-      
-      localStorage.setItem('token', access_token);
-      localStorage.setItem('token_expires_at', Date.now() + (expires_in * 1000));
-      
-      return true;
-    } catch (error) {
-      // Refresh failed, logout user
-      logout();
-      return false;
-    }
-  };
-
-  const checkTokenExpiry = async () => {
-    const token = localStorage.getItem('token');
-    const expiresAt = localStorage.getItem('token_expires_at');
-    
-    if (!token || !expiresAt) {
-      return false;
-    }
-    
-    // Check if token expires in the next 5 minutes
-    const fiveMinutesFromNow = Date.now() + (5 * 60 * 1000);
-    if (parseInt(expiresAt) < fiveMinutesFromNow) {
-      return await refreshToken();
-    }
-    
-    return true;
   };
 
   const value = {

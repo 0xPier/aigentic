@@ -64,10 +64,4 @@ testing/
 pytest.ini
 
 # Scripts
-*.sh
-create_admin.py
-
-# Other
-alembic.ini
-logfile
-.DS_Store 
+*.sh 
