@@ -9,13 +9,20 @@ import argparse
 from pathlib import Path
 
 # Add project root to the Python path
-project_root = Path(__file__).parent.parent.absolute()
+project_root = Path(__file__).parent.absolute()
 sys.path.insert(0, str(project_root))
 
 from src.core.config import settings
 from src.database.connection import SessionLocal
 from src.database.models import User
-from src.api.routers.auth import get_password_hash
+from passlib.context import CryptContext
+
+# Create password context
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def get_password_hash(password: str) -> str:
+    """Hash a password."""
+    return pwd_context.hash(password)
 
 
 def create_admin(email: str, username: str, password: str, full_name: str = "Admin User"):
