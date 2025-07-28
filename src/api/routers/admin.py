@@ -10,7 +10,8 @@ from src.database.connection import get_db
 from src.database.models import User
 from src.core.config import settings
 from src.api.auth import create_token_pair
-from src.services.auth_service import get_current_active_user
+from src.api.auth import get_current_active_user
+from src.api.schemas import UserResponse
 
 router = APIRouter()
 
@@ -48,7 +49,7 @@ async def dev_login() -> Dict[str, Any]:
     }
 
 
-@router.get("/users/", response_model=list[User])
+@router.get("/users/", response_model=list[UserResponse])
 def read_users(
     skip: int = 0,
     limit: int = 100,

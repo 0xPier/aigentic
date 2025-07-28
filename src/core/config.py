@@ -55,7 +55,6 @@ class Settings(BaseSettings):
     
     # Application
     debug: bool = config("DEBUG", default=True, cast=bool)
-    environment: str = config("ENVIRONMENT", default="development")
     api_host: str = config("API_HOST", default="0.0.0.0")
     api_port: int = config("API_PORT", default=8000, cast=int)
     
@@ -81,6 +80,7 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        extra = "allow"  # Allow extra fields from environment
     
     def __post_init__(self):
         """Validate critical environment variables after initialization."""

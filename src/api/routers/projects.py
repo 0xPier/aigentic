@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 
 from src.database.connection import get_db
 from src.database.models import Project, User
-from src.schemas.project import ProjectCreate, ProjectRead
-from src.services.auth_service import get_current_active_user
+from src.api.schemas import ProjectCreate, ProjectResponse
+from src.api.auth import get_current_active_user
 
 router = APIRouter()
 
@@ -30,7 +30,7 @@ async def get_project_for_user(
     return project
 
 
-@router.post("/", response_model=ProjectRead)
+@router.post("/", response_model=ProjectResponse)
 async def create_project(
     project_data: ProjectCreate,
     current_user: User = Depends(get_current_active_user),
@@ -50,7 +50,7 @@ async def create_project(
     return db_project
 
 
-@router.get("/", response_model=List[ProjectRead])
+@router.get("/", response_model=List[ProjectResponse])
 async def get_user_projects(
     skip: int = 0,
     limit: int = 100,
@@ -65,13 +65,13 @@ async def get_user_projects(
     return projects
 
 
-@router.get("/{project_id}", response_model=ProjectRead)
+@router.get("/{project_id}", response_model=ProjectResponse)
 async def get_project(project: Project = Depends(get_project_for_user)):
     """Get a specific project."""
     return project
 
 
-@router.put("/{project_id}", response_model=ProjectRead)
+@router.put("/{project_id}", response_model=ProjectResponse)
 async def update_project(
     project_update: ProjectCreate,
     project: Project = Depends(get_project_for_user),

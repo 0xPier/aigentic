@@ -5,8 +5,8 @@ from alembic import context
 import os
 import sys
 
-# Add the src directory to the path so we can import our models
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+# Add the project root to the path so we can import our models
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from src.database.models import Base
 from src.core.config import settings
@@ -32,11 +32,17 @@ target_metadata = Base.metadata
 
 def get_url():
     """Get database URL from environment variables."""
+    # Check if we have a DATABASE_URL from environment first
+    db_url = os.getenv("DATABASE_URL")
+    if db_url:
+        return db_url
+    
+    # Otherwise build from individual components
     user = os.getenv("POSTGRES_USER", "postgres")
-    password = os.getenv("POSTGRES_PASSWORD", "password")
+    password = os.getenv("POSTGRES_PASSWORD", "postgres")
     server = os.getenv("POSTGRES_HOST", "localhost")
-    port = os.getenv("POSTGRES_PORT", "5432")
-    db = os.getenv("POSTGRES_DB", "ai_consultancy")
+    port = os.getenv("POSTGRES_PORT", "5433")  # Docker maps to 5433
+    db = os.getenv("POSTGRES_DB", "agentic_platform")
     return f"postgresql://{user}:{password}@{server}:{port}/{db}"
 
 

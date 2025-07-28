@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from src.core.config import settings
 from src.database.connection import get_db
 from src.database.models import User, Subscription
-from src.api.schemas import TokenData, User as UserSchema
+from src.api.schemas import TokenData, UserResponse
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
@@ -105,6 +105,19 @@ def refresh_access_token(refresh_token: str, db: Session) -> Dict[str, Any]:
     return {
         "access_token": access_token,
         "refresh_token": create_refresh_token(data={"sub": username}),
+        "token_type": "bearer",
+        "expires_in": settings.access_token_expire_minutes * 60
+    }
+
+def create_token_pair(data: dict) -> Dict[str, Any]:
+    """Create access and refresh token pair."""
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = create_access_token(data=data, expires_delta=access_token_expires)
+    refresh_token = create_refresh_token(data=data)
+    
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
         "token_type": "bearer",
         "expires_in": settings.access_token_expire_minutes * 60
     }

@@ -10,12 +10,14 @@ import os
 
 from src.core.config import settings
 from src.database.connection import create_tables
-from src.api.routers import auth, users, projects, tasks, agents, feedback, integrations
+# from src.api.routers import auth, users, projects, tasks, agents, feedback, integrations
+from src.api.routers import auth, users, projects  # tasks, feedback, integrations temporarily disabled
+# agents, tasks, feedback, integrations temporarily disabled for core functionality testing
 from src.database.models import User
 from src.database.connection import SessionLocal
 
 # Import admin router conditionally for development
-if settings.ENVIRONMENT == 'development':
+if settings.environment == 'development':
     from src.api.routers import admin
 
 
@@ -29,7 +31,7 @@ async def lifespan(app: FastAPI):
     # Seed admin user if not exists
     db = SessionLocal()
     try:
-        if settings.ENVIRONMENT == 'development':
+        if settings.environment == 'development':
             admin_user = db.query(User).filter(User.email == "admin@example.com").first()
             if not admin_user:
                 from src.api.routers.auth import get_password_hash
@@ -88,13 +90,13 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
-app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
-app.include_router(agents.router, prefix="/api/agents", tags=["agents"])
-app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
-app.include_router(integrations.router, prefix="/api/integrations", tags=["integrations"])
+# app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
+# app.include_router(agents.router, prefix="/api/agents", tags=["agents"]) # agents temporarily disabled for core functionality testing
+# app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
+# app.include_router(integrations.router, prefix="/api/integrations", tags=["integrations"])
 
 # Include admin router in development only
-if settings.ENVIRONMENT == 'development':
+if settings.environment == 'development':
     app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 
 

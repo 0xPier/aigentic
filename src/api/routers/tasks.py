@@ -4,13 +4,13 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 
-from ..api.auth import get_current_active_user, check_subscription_limits
+from src.api.auth import get_current_active_user, check_subscription_limits
 from src.api.schemas import (
     TaskCreate, TaskResponse, TaskUpdate, AgentTaskRequest, AgentTaskResponse
 )
 from src.database.connection import get_db
 from src.database.models import User, Task, Project
-from src.agents.tasks import execute_orchestrator_task
+# from src.agents.tasks import execute_orchestrator_task
 
 router = APIRouter()
 
@@ -147,15 +147,15 @@ async def execute_agent_task(
         db.refresh(db_task)
         
         # Execute task asynchronously
-        task_result = execute_orchestrator_task.delay(
-            task_id=db_task.id,
-            query=task_request.query,
-            context=task_request.context or {}
-        )
+        # task_result = execute_orchestrator_task.delay(
+        #     task_id=db_task.id,
+        #     query=task_request.query,
+        #     context=task_request.context or {}
+        # )
         
         # Update task with celery task ID
-        db_task.celery_task_id = task_result.id
-        db.commit()
+        # db_task.celery_task_id = task_result.id
+        # db.commit()
         
         return db_task
         
