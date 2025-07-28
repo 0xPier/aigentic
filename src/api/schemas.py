@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, validator
 
 
 # User schemas
@@ -161,22 +161,27 @@ class FeedbackResponse(BaseModel):
 
 # Integration schemas
 class IntegrationCreate(BaseModel):
-    integration_type: str
-    configuration: Dict[str, Any]
-
+    name: str  # integration type like 'openai', 'twitter', etc.
+    api_key: str
+    config: Optional[Dict[str, Any]] = {}
 
 class IntegrationUpdate(BaseModel):
-    configuration: Optional[Dict[str, Any]] = None
+    name: Optional[str] = None
+    api_key: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
     is_active: Optional[bool] = None
-
 
 class IntegrationResponse(BaseModel):
     id: int
-    user_id: int
     integration_type: str
     is_active: bool
     created_at: datetime
-    updated_at: Optional[datetime]
+    updated_at: Optional[datetime] = None
+    
+    # Don't expose the actual API key in responses
+    @validator('integration_type', pre=True, always=True)
+    def format_integration_type(cls, v):
+        return v
     
     class Config:
         from_attributes = True

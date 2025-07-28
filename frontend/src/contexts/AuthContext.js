@@ -147,7 +147,7 @@ export const AuthProvider = ({ children }) => {
       let response;
       
       // Development bypass - only in development mode and when using admin/admin123
-      if (process.env.NODE_ENV === 'development' && username === 'admin' && password === 'admin123') {
+      if (process.env.REACT_APP_ENVIRONMENT === 'development' && username === 'admin' && password === 'admin123') {
         response = { data: { access_token: 'dev_admin_token', refresh_token: 'dev_refresh_token' } };
       } else {
         response = await authAPI.login({ username, password });
@@ -164,7 +164,7 @@ export const AuthProvider = ({ children }) => {
       
       // Get user info
       let userResponse;
-      if (process.env.NODE_ENV === 'development' && username === 'admin') {
+      if (process.env.REACT_APP_ENVIRONMENT === 'development' && username === 'admin') {
         userResponse = { 
           data: {
             id: 1,

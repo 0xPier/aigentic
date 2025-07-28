@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from src.database.connection import get_db
-from src.database.models import User
+from src.database.models import User, Subscription
 from src.api.schemas import UserCreate, UserResponse, Token, RefreshTokenRequest, LoginRequest
 from src.api.auth import (
     get_password_hash,
@@ -44,6 +44,17 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+    
+    # Create subscription record for new user
+    subscription = Subscription(
+        user_id=db_user.id,
+        plan_name="free",
+        status="active",
+        monthly_tasks_used=0,
+        monthly_tasks_limit=10
+    )
+    db.add(subscription)
+    db.commit()
     
     return db_user
 

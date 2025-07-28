@@ -24,8 +24,7 @@ function Login() {
   const [isDev, setIsDev] = useState(false);
 
   useEffect(() => {
-    // Check if we're in development mode
-    setIsDev(process.env.NODE_ENV === 'development');
+    setIsDev(process.env.REACT_APP_ENVIRONMENT === 'development');
   }, []);
 
   const {
