@@ -65,7 +65,7 @@ A full-stack AI Agent Platform built with Next.js, FastAPI, and MongoDB. This pl
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/aigentic.git
+git clone https://github.com/0xPier/aigentic.git
 cd aigentic
 ```
 
