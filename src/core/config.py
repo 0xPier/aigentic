@@ -18,13 +18,10 @@ class Settings(BaseSettings):
     environment: str = config("ENVIRONMENT", default="development")
     
     # Database
-    database_url: str = config("DATABASE_URL", default="sqlite:///./ai_consultancy.db")
+    database_url: str = config("DATABASE_URL", default="mongodb://localhost:27017/agentic_platform")
     
-    # JWT Authentication
+    # Security
     secret_key: str = config("SECRET_KEY", default="your-secret-key-change-in-production")
-    algorithm: str = config("ALGORITHM", default="HS256")
-    access_token_expire_minutes: int = config("ACCESS_TOKEN_EXPIRE_MINUTES", default=30, cast=int)
-    refresh_token_expire_days: int = config("REFRESH_TOKEN_EXPIRE_DAYS", default=7, cast=int)
     
     # Subscription Limits
     free_tier_monthly_tasks: int = config("FREE_TIER_MONTHLY_TASKS", default=10, cast=int)
@@ -32,8 +29,13 @@ class Settings(BaseSettings):
     pro_tier_monthly_tasks: int = config("PRO_TIER_MONTHLY_TASKS", default=500, cast=int)
     enterprise_tier_monthly_tasks: int = config("ENTERPRISE_TIER_MONTHLY_TASKS", default=-1, cast=int)  # Unlimited
     
-    # OpenAI
+    # LLM Configuration
+    llm_provider: str = config("LLM_PROVIDER", default="openai")  # openai, ollama, anthropic, etc.
     openai_api_key: str = config("OPENAI_API_KEY", default="")
+    openai_api_base: str = config("OPENAI_API_BASE", default="https://api.openai.com/v1")
+    ollama_base_url: str = config("OLLAMA_BASE_URL", default="http://localhost:11434")
+    ollama_model: str = config("OLLAMA_MODEL", default="llama2")
+    anthropic_api_key: str = config("ANTHROPIC_API_KEY", default="")
     
     # Social Media APIs
     twitter_api_key: str = config("TWITTER_API_KEY", default="")
@@ -73,10 +75,7 @@ class Settings(BaseSettings):
     smtp_user: str = config("SMTP_USER", default="")
     smtp_password: str = config("SMTP_PASSWORD", default="")
     
-    # Admin User
-    admin_username: str = config("ADMIN_USERNAME", default="admin")
-    admin_email: str = config("ADMIN_EMAIL", default="admin@example.com")
-    admin_password: str = config("ADMIN_PASSWORD", default="securepassword")
+    
 
     class Config:
         env_file = ".env"
@@ -90,9 +89,12 @@ class Settings(BaseSettings):
         """Validate critical environment variables and log warnings for missing ones."""
         critical_vars = {
             'DATABASE_URL': self.database_url,
-            'SECRET_KEY': self.secret_key,
             'REDIS_URL': self.redis_url
         }
+        
+        # For self-hosted setup, SECRET_KEY is less critical - generate a default if needed
+        if not self.secret_key or self.secret_key in ['your-secret-key-change-in-production']:
+            logger.info("Using default secret key for self-hosted setup")
         
         optional_vars = {
             'OPENAI_API_KEY': self.openai_api_key,
@@ -103,14 +105,10 @@ class Settings(BaseSettings):
             'SMTP_USER': self.smtp_user
         }
         
-        # Check critical variables
+        # Check critical variables (removed SECRET_KEY for self-hosted)
         for var_name, var_value in critical_vars.items():
-            if not var_value or var_value in ['your-secret-key-change-in-production']:
-                if self.environment == 'production':
-                    logger.error(f"Critical environment variable {var_name} is not set or using default value")
-                    raise ValueError(f"Critical environment variable {var_name} must be set in production")
-                else:
-                    logger.warning(f"Environment variable {var_name} is not set or using default value")
+            if not var_value:
+                logger.warning(f"Environment variable {var_name} is not set - some features may not work")
         
         # Check optional variables
         missing_optional = []
@@ -118,15 +116,48 @@ class Settings(BaseSettings):
             if not var_value:
                 missing_optional.append(var_name)
         
+        # Relaxed validation for self-hosted setup
+        if self.llm_provider == "openai" and not self.openai_api_key:
+            logger.warning("OPENAI_API_KEY is not set - OpenAI features will not work.")
+
         if missing_optional:
             logger.info(f"Optional environment variables not set: {', '.join(missing_optional)}")
-            logger.info("Some features may be limited without these API keys")
+            logger.info("Some features may be limited without these API keys - this is normal for self-hosted setups")
+    
+    def get_llm_config(self):
+        """Get LLM configuration based on provider."""
+        if self.llm_provider == "openai":
+            return {
+                "provider": "openai",
+                "api_key": self.openai_api_key,
+                "api_base": self.openai_api_base,
+                "model": "gpt-3.5-turbo"
+            }
+        elif self.llm_provider == "ollama":
+            return {
+                "provider": "ollama",
+                "base_url": self.ollama_base_url,
+                "model": self.ollama_model
+            }
+        elif self.llm_provider == "anthropic":
+            return {
+                "provider": "anthropic",
+                "api_key": self.anthropic_api_key,
+                "model": "claude-3-sonnet-20240229"
+            }
+        else:
+            return {
+                "provider": "openai",
+                "api_key": self.openai_api_key,
+                "api_base": self.openai_api_base,
+                "model": "gpt-3.5-turbo"
+            }
 
 
 # Global settings instance
-settings = Settings()
+app_config = Settings()
 
 
-def get_settings() -> Settings:
+def get_app_config() -> Settings:
     """Get application settings."""
-    return settings
+    return app_config

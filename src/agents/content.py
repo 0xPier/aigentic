@@ -283,18 +283,7 @@ class ContentAgent(LLMAgent):
                     f.write(str(content))
             
             logger.info(f"Content saved to {filepath}")
-            
-        except Exception as e:
-            logger.error(f"Failed to save content to {filename}: {str(e)}")
-            json_filename = f"content_data_task_{task_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            json_filepath = os.path.join(upload_dir, json_filename)
-            
-            with open(json_filepath, 'w', encoding='utf-8') as f:
-                json.dump(content, f, indent=2, ensure_ascii=False)
-            
-            output_files.append(json_filepath)
-            
+            return [filepath]
         except Exception as e:
             self.logger.error(f"Failed to save content: {e}")
-        
-        return output_files
+            return []

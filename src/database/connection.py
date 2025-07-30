@@ -1,35 +1,17 @@
-"""Database connection and session management."""
+from pymongo import AsyncMongoClient
+from src.core.config import app_config
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import StaticPool
-from src.core.config import settings
-from src.database.models import Base
+class MongoDB:
+    client: AsyncMongoClient = None
+    database = None
 
-# Create database engine
-if settings.database_url.startswith("sqlite"):
-    engine = create_engine(
-        settings.database_url,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-else:
-    engine = create_engine(settings.database_url)
+mongodb = MongoDB()
 
-# Create session factory
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+async def connect_to_mongo():
+    mongodb.client = AsyncMongoClient(app_config.database_url)
+    mongodb.database = mongodb.client.get_database()
+    print("Connected to MongoDB.")
 
-
-def create_tables():
-    """Create all database tables."""
-    Base.metadata.create_all(bind=engine)
-
-
-def get_db() -> Session:
-    """Get database session dependency for FastAPI."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
+async def close_mongo_connection():
+    mongodb.client.close()
+    print("Disconnected from MongoDB.")

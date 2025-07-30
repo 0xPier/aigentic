@@ -1,66 +1,56 @@
-"""Projects router for project management."""
-
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 
-from src.database.connection import get_db
-from src.database.models import Project, User
+from src.database.connection import mongodb
+from src.database.models import Project, User, PyObjectId
 from src.api.schemas import ProjectCreate, ProjectResponse
-from src.api.auth import get_current_active_user
+from src.api.dependencies import get_default_user
 
 router = APIRouter()
 
 async def get_project_for_user(
-    project_id: int,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+    project_id: PyObjectId,
+    current_user: User = Depends(get_default_user),
 ) -> Project:
     """Dependency to get a project and verify ownership."""
-    project = db.query(Project).filter(
-        Project.id == project_id,
-        Project.owner_id == current_user.id
-    ).first()
+    project_collection = mongodb.database["projects"]
+    project_doc = project_collection.find_one({"_id": project_id, "owner_id": current_user.id})
     
-    if not project:
+    if not project_doc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found"
         )
-    return project
+    return Project(**project_doc)
 
 
 @router.post("/", response_model=ProjectResponse)
 async def create_project(
     project_data: ProjectCreate,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_default_user),
 ):
     """Create a new project."""
-    db_project = Project(
-        name=project_data.name,
-        description=project_data.description,
-        owner_id=current_user.id
-    )
+    project_collection = mongodb.database["projects"]
+    project_dict = project_data.model_dump(exclude_unset=True)
+    project_dict["owner_id"] = current_user.id
     
-    db.add(db_project)
-    db.commit()
-    db.refresh(db_project)
+    new_project = Project(**project_dict)
+    result = await project_collection.insert_one(new_project.model_dump(by_alias=True, exclude_none=True))
+    new_project.id = result.inserted_id
     
-    return db_project
+    return new_project
 
 
 @router.get("/", response_model=List[ProjectResponse])
 async def get_user_projects(
     skip: int = 0,
     limit: int = 100,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_default_user),
 ):
     """Get user's projects."""
-    projects = db.query(Project).filter(
-        Project.owner_id == current_user.id
-    ).offset(skip).limit(limit).all()
+    project_collection = mongodb.database["projects"]
+    projects_cursor = project_collection.find({"owner_id": current_user.id}).skip(skip).limit(limit)
+    projects = [Project(**doc) async for doc in projects_cursor]
     
     return projects
 
@@ -75,23 +65,25 @@ async def get_project(project: Project = Depends(get_project_for_user)):
 async def update_project(
     project_update: ProjectCreate,
     project: Project = Depends(get_project_for_user),
-    db: Session = Depends(get_db)
 ):
     """Update a project."""
-    for field, value in project_update.dict(exclude_unset=True).items():
-        setattr(project, field, value)
+    project_collection = mongodb.database["projects"]
+    update_data = project_update.model_dump(exclude_unset=True)
     
-    db.commit()
-    db.refresh(project)
-    return project
+    await project_collection.update_one(
+        {"_id": project.id},
+        {"$set": update_data}
+    )
+    
+    updated_project_doc = project_collection.find_one({"_id": project.id})
+    return Project(**updated_project_doc)
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project(
     project: Project = Depends(get_project_for_user),
-    db: Session = Depends(get_db)
 ):
     """Delete a project."""
-    db.delete(project)
-    db.commit()
+    project_collection = mongodb.database["projects"]
+    await project_collection.delete_one({"_id": project.id})
     return {"message": "Project deleted successfully"}

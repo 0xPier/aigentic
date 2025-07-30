@@ -1,0 +1,36 @@
+{
+  "name": "ai-consultancy-nextjs-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.11.4",
+    "@emotion/server": "^11.11.0",
+    "@emotion/styled": "^11.11.5",
+    "@mui/icons-material": "^5.15.20",
+    "@mui/material": "^5.15.20",
+    "@mui/lab": "^5.0.0-alpha.173",
+    "axios": "^1.7.2",
+    "next": "^14.2.5",
+    "prop-types": "^15.8.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-query": "^3.39.3",
+    "js-cookie": "^3.0.5"
+  },
+  "devDependencies": {
+    "@types/js-cookie": "^3.0.6",
+    "@types/node": "^20.14.10",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.5",
+    "typescript": "^5.5.3"
+  }
+}

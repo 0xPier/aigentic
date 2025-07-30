@@ -9,10 +9,10 @@ import asyncio
 from dataclasses import dataclass
 
 from ..integrations.api_client import api_manager
-from ..core.config import settings
+from src.core.config import app_config
 from .memory_manager import memory_manager, MemoryType
 from ..database.models import AgentMemory
-from ..database.connection import get_db
+from src.database.connection import mongodb
 
 logger = logging.getLogger(__name__)
 
@@ -321,40 +321,39 @@ class BaseAgent(ABC):
             return
         
         try:
-            db = get_db()
             memory = AgentMemory(
                 agent_name=self.name,
                 memory_type=memory_type,
-                content=json.dumps(content),
+                content=content,
                 context_tags=context_tags or [],
                 relevance_score=relevance_score
             )
-            db.add(memory)
-            db.commit()
-            db.close()
+            mongodb.database["agent_memory"].insert_one(memory.model_dump(by_alias=True, exclude_none=True))
         except Exception as e:
             self.logger.error(f"Failed to save memory: {e}")
     
-    def retrieve_memory(self, memory_type: str = None, 
+    async def retrieve_memory(self, memory_type: str = None, 
                        context_tags: List[str] = None, 
                        limit: int = 10) -> List[Dict[str, Any]]:
         """Retrieve relevant memories."""
         try:
-            db = get_db()
-            query = db.query(AgentMemory).filter(AgentMemory.agent_name == self.name)
+            query_filter = {"agent_name": self.name}
             
             if memory_type:
-                query = query.filter(AgentMemory.memory_type == memory_type)
+                query_filter["memory_type"] = memory_type
             
             if context_tags:
-                # Simple tag matching - in production, use vector similarity
-                for tag in context_tags:
-                    query = query.filter(AgentMemory.context_tags.contains([tag]))
+                query_filter["context_tags"] = {"$all": context_tags}
             
-            memories = query.order_by(AgentMemory.relevance_score.desc()).limit(limit).all()
-            db.close()
+            memories_cursor = mongodb.database["agent_memory"].find(query_filter).sort(
+                [('relevance_score', -1)]
+            ).limit(limit)
             
-            return [json.loads(memory.content) for memory in memories]
+            memories = []
+            async for doc in memories_cursor:
+                memories.append(AgentMemory(**doc).model_dump())
+            
+            return memories
         except Exception as e:
             self.logger.error(f"Failed to retrieve memory: {e}")
             return []
@@ -365,7 +364,7 @@ class LLMAgent(BaseAgent):
     
     def __init__(self, name: str, description: str = ""):
         super().__init__(name, description)
-        self.openai_api_key = settings.openai_api_key
+        self.openai_api_key = app_config.openai_api_key
         
         if not self.openai_api_key:
             self.logger.warning("OpenAI API key not configured")

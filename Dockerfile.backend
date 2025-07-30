@@ -13,7 +13,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     debian-archive-keyring \
     build-essential \
     curl \
-    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Create and set working directory
@@ -23,38 +22,21 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Install Python dependencies with retries and increased timeout
-RUN pip install --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir --timeout=100 --retries=3 -r requirements.txt || \
-    pip install --no-cache-dir --timeout=100 --retries=3 -r requirements.txt || \
-    pip install --no-cache-dir --timeout=100 --retries=3 -r requirements.txt
+RUN pip install --upgrade pip setuptools wheel &&     pip install --no-cache-dir --timeout=100 --retries=3 -r requirements.txt --prefix=/usr/local
 
 # Copy the application code
-COPY . .
+COPY src/ /app/src/
 
 # Production stage
 FROM python:3.10-slim AS production
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PATH="/app/.local/bin:$PATH" \
-    PYTHONPATH="/app:$PYTHONPATH"
+ENV PYTHONDONTWRITEBYTECODE=1     PYTHONUNBUFFERED=1     PATH="/usr/local/bin:$PATH"     PYTHONPATH="/app:$PYTHONPATH"
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    debian-archive-keyring \
-    libpq5 \
     curl \
-    wget \
-    gnupg \
-    unzip \
-    xvfb \
-    chromium \
-    chromium-driver \
     && rm -rf /var/lib/apt/lists/*
-
-# Create non-root user
-RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 # Set working directory
 WORKDIR /app
@@ -66,12 +48,8 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy application code and configuration
 COPY --from=builder /app/ /app/
 
-# Create necessary directories and set permissions
-RUN mkdir -p uploads logs && \
-    chown -R appuser:appuser /app
-
-# Switch to non-root user
-USER appuser
+# Create necessary directories
+RUN mkdir -p uploads logs
 
 # Expose the port the app runs on
 EXPOSE 8000

@@ -1,12 +1,12 @@
-"""Celery configuration for async task processing."""
+"""Celery application configuration."""
 
 from celery import Celery
-from src.core.config import settings
+from src.core.config import app_config
 
 celery_app = Celery("ai_consultancy")
 
-celery_app.conf.broker_url = settings.redis_url
-celery_app.conf.result_backend = settings.redis_url
+celery_app.conf.broker_url = app_config.redis_url
+celery_app.conf.result_backend = app_config.redis_url
 celery_app.conf.task_serializer = "json"
 celery_app.conf.accept_content = ["json"]
 celery_app.conf.result_serializer = "json"
@@ -17,6 +17,7 @@ celery_app.conf.task_time_limit = 30 * 60
 celery_app.conf.task_soft_time_limit = 25 * 60
 celery_app.conf.worker_prefetch_multiplier = 1
 celery_app.conf.worker_max_tasks_per_child = 1000
+celery_app.conf.broker_connection_retry_on_startup = True
 celery_app.conf.beat_scheduler = 'redbeat.RedBeatScheduler'
 celery_app.conf.beat_max_loop_interval = 300
 celery_app.conf.beat_schedule = {

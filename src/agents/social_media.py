@@ -9,7 +9,7 @@ import asyncio
 import logging
 
 from src.agents.base import LLMAgent, AgentContext, AgentResult
-from src.core.config import settings
+from src.core.config import app_config
 from src.integrations.api_client import api_manager
 
 logger = logging.getLogger(__name__)
@@ -132,26 +132,28 @@ class SocialMediaAgent(LLMAgent):
     
     async def _initialize_clients(self):
         """Initialize social media API clients."""
-        try:
-            # Initialize Twitter client
-            if settings.twitter_api_key and settings.twitter_api_secret:
+        # Initialize Twitter client
+        if app_config.twitter_api_key and app_config.twitter_api_secret:
+            try:
                 auth = tweepy.OAuthHandler(
-                    settings.twitter_api_key,
-                    settings.twitter_api_secret
+                    app_config.twitter_api_key,
+                    app_config.twitter_api_secret
                 )
-                if settings.twitter_access_token and settings.twitter_access_token_secret:
+                if app_config.twitter_access_token and app_config.twitter_access_token_secret:
                     auth.set_access_token(
-                        settings.twitter_access_token,
-                        settings.twitter_access_token_secret
+                        app_config.twitter_access_token,
+                        app_config.twitter_access_token_secret
                     )
                 self._twitter_client = tweepy.API(auth, wait_on_rate_limit=True)
-            
-            # Initialize Telegram bot
-            if settings.telegram_bot_token:
-                self._telegram_bot = Bot(token=settings.telegram_bot_token)
-                
-        except Exception as e:
-            self.logger.error(f"Failed to initialize social media clients: {e}")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize Twitter client: {e}")
+        
+        # Initialize Telegram bot
+        if app_config.telegram_bot_token:
+            try:
+                self._telegram_bot = Bot(token=app_config.telegram_bot_token)
+            except Exception as e:
+                self.logger.error(f"Failed to initialize Telegram bot: {e}")
     
     async def _execute_social_actions(self, spec: Dict[str, Any], context: AgentContext) -> Dict[str, Any]:
         """Execute social media actions based on specification."""

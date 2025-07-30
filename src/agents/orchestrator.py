@@ -7,7 +7,7 @@ import json
 
 from src.agents.base import BaseAgent, AgentContext, AgentResult, LLMAgent
 from src.agents.registry import AgentRegistry
-from src.agents.baby_agi import baby_agi
+# from src.agents.baby_agi import baby_agi
 from src.agents.tools.file import get_file_tools
 from src.agents.tools.process import get_process_tools
 from src.agents.tools.search import get_search_tools

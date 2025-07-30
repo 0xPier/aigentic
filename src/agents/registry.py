@@ -49,6 +49,9 @@ class AgentRegistry:
                 self._agent_classes[agent_instance.name] = agent_class
             except Exception as e:
                 print(f"Failed to initialize agent {agent_class.__name__}: {e}")
+                # Log the error and continue with other agents
+                import logging
+                logging.error(f"Failed to initialize agent {agent_class.__name__}: {e}")
     
     def get_agent(self, agent_name: str) -> Optional[BaseAgent]:
         """Get an agent instance by name."""

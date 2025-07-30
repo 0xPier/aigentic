@@ -16,7 +16,7 @@ import io
 import base64
 import logging
 
-from ..core.config import settings
+from src.core.config import app_config
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +25,10 @@ class OpenAIClient:
     """OpenAI API client for LLM operations."""
     
     def __init__(self, api_key: str = None):
-        self.api_key = api_key or settings.openai_api_key
-        if self.api_key:
-            openai.api_key = self.api_key
+        self.api_key = api_key or app_config.openai_api_key
+        if not self.api_key:
+            logger.warning("OpenAI API key not configured. OpenAI features may not work.")
+        openai.api_key = self.api_key
     
     async def chat_completion(
         self, 
@@ -94,10 +95,10 @@ class TwitterClient:
     
     def __init__(self, api_key: str = None, api_secret: str = None, 
                  access_token: str = None, access_token_secret: str = None):
-        self.api_key = api_key or settings.twitter_api_key
-        self.api_secret = api_secret or settings.twitter_api_secret
-        self.access_token = access_token or settings.twitter_access_token
-        self.access_token_secret = access_token_secret or settings.twitter_access_token_secret
+        self.api_key = api_key or app_config.twitter_api_key
+        self.api_secret = api_secret or app_config.twitter_api_secret
+        self.access_token = access_token or app_config.twitter_access_token
+        self.access_token_secret = access_token_secret or app_config.twitter_access_token_secret
         
         if all([self.api_key, self.api_secret, self.access_token, self.access_token_secret]):
             self.client = tweepy.Client(
@@ -190,7 +191,7 @@ class TelegramClient:
     """Telegram Bot API client."""
     
     def __init__(self, bot_token: str = None):
-        self.bot_token = bot_token or settings.telegram_bot_token
+        self.bot_token = bot_token or app_config.telegram_bot_token
         if self.bot_token:
             self.bot = Bot(token=self.bot_token)
         else:
@@ -302,7 +303,7 @@ class ImageGenerationClient:
         model: str = "stable-diffusion-xl-1024-v1-0"
     ) -> Dict[str, Any]:
         """Generate image using Stability AI."""
-        api_key = api_key or settings.stability_api_key
+        api_key = api_key or app_config.stability_api_key
         if not api_key:
             return {"success": False, "error": "Stability AI API key not configured"}
         
@@ -377,31 +378,39 @@ class APIClientManager:
         
         # Test OpenAI
         try:
-            test_response = await self.openai.chat_completion([
-                {"role": "user", "content": "Hello"}
-            ])
-            results["openai"] = test_response["success"]
-        except:
+            if self.openai.api_key:
+                test_response = await self.openai.chat_completion([
+                    {"role": "user", "content": "Hello"}
+                ], model="gpt-3.5-turbo", max_tokens=10)
+                results["openai"] = test_response["success"]
+            else:
+                results["openai"] = False
+        except Exception as e:
+            logger.error(f"OpenAI connection test failed: {e}")
             results["openai"] = False
         
         # Test Twitter
         try:
             if self.twitter.client:
-                # Simple API test
-                results["twitter"] = True
+                # Attempt to get user info (non-destructive)
+                user_info = await self.twitter.get_user_tweets(username="twitterdev", max_results=1)
+                results["twitter"] = user_info["success"]
             else:
                 results["twitter"] = False
-        except:
+        except Exception as e:
+            logger.error(f"Twitter connection test failed: {e}")
             results["twitter"] = False
         
         # Test Telegram
         try:
             if self.telegram.bot:
-                # Simple bot info test
+                # Attempt to get bot info (non-destructive)
+                bot_info = await self.telegram.bot.get_me()
                 results["telegram"] = True
             else:
                 results["telegram"] = False
-        except:
+        except Exception as e:
+            logger.error(f"Telegram connection test failed: {e}")
             results["telegram"] = False
         
         return results

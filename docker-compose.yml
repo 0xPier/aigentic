@@ -1,21 +1,16 @@
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15-alpine
-    container_name: agentic_postgres
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-agentic_platform}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+  # MongoDB Database
+  mongo:
+    image: mongo:latest
+    container_name: agentic_mongo
     ports:
-      - "5433:5432"
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
     networks:
       - agentic_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      test: echo 'db.runCommand("ping").ok' | mongosh --quiet
       interval: 10s
       timeout: 5s
       retries: 5
@@ -44,7 +39,7 @@ services:
     image: agentic_backend:latest
     container_name: agentic_backend
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=mongodb://mongo:27017/agentic_platform
       - REDIS_URL=${REDIS_URL}
       - SECRET_KEY=${SECRET_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -54,7 +49,7 @@ services:
       - TWITTER_ACCESS_TOKEN_SECRET=${TWITTER_ACCESS_TOKEN_SECRET}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - STABILITY_API_KEY=${STABILITY_API_KEY}
-      - ENVIRONMENT=${ENVIRONMENT}
+      - ENVIRONMENT=development
       - DEBUG=${DEBUG}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
       - API_HOST=${API_HOST}
@@ -65,7 +60,7 @@ services:
       - ./uploads:/app/uploads
       - ./logs:/app/logs
     depends_on:
-      postgres:
+      mongo:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -76,7 +71,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    restart: unless-stopped
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --workers 4
+    restart: "no"
 
   # Celery Worker
   celery_worker:
@@ -86,7 +82,7 @@ services:
     container_name: agentic_celery_worker
     command: celery -A src.core.celery_app.celery_app worker --loglevel=info
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=mongodb://mongo:27017/agentic_platform
       - REDIS_URL=${REDIS_URL}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
@@ -97,13 +93,13 @@ services:
       - ./uploads:/app/uploads
       - ./logs:/app/logs
     depends_on:
-      postgres:
+      mongo:
         condition: service_healthy
       redis:
         condition: service_healthy
     networks:
       - agentic_network
-    restart: unless-stopped
+    restart: "no"
 
   # Celery Beat
   celery_beat:
@@ -113,7 +109,7 @@ services:
     container_name: agentic_celery_beat
     command: celery -A src.core.celery_app.celery_app beat -s /app/celerybeat-schedule --loglevel=info
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=mongodb://mongo:27017/agentic_platform
       - REDIS_URL=${REDIS_URL}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
@@ -123,30 +119,31 @@ services:
     volumes:
       - ./logs:/app/logs
     depends_on:
-      postgres:
+      mongo:
         condition: service_healthy
       redis:
         condition: service_healthy
     networks:
       - agentic_network
-    restart: unless-stopped
+    restart: "no"
 
-  # React Frontend
-  frontend:
+  # Next.js Frontend
+  nextjs_frontend:
     build:
-      context: ./frontend
+      context: ./nextjs-frontend
       dockerfile: Dockerfile
       args:
-        - REACT_APP_API_URL=${API_URL}
-        - REACT_APP_ENVIRONMENT=${ENVIRONMENT}
-    container_name: agentic_frontend
+        - NEXT_PUBLIC_API_URL=http://backend:8000 # Point to backend service
+    container_name: agentic_nextjs_frontend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080/api # Through nginx proxy
     ports:
-      - "3000:80"
+      - "3000:3000"
     depends_on:
       - backend
     networks:
       - agentic_network
-    restart: unless-stopped
+    restart: "no"
 
   # Nginx Reverse Proxy
   nginx:
@@ -160,13 +157,18 @@ services:
       - ./uploads:/var/www/uploads:ro
     depends_on:
       - backend
-      - frontend
+      - nextjs_frontend # Nginx now depends on the new frontend
     networks:
       - agentic_network
-    restart: unless-stopped
+    restart: "no"
+    command: >
+      sh -c "
+      rm -f /etc/nginx/conf.d/default.conf &&
+      nginx -g 'daemon off;'
+      "
 
 volumes:
-  postgres_data:
+  mongo_data:
   redis_data:
   prometheus_data:
   grafana_data:

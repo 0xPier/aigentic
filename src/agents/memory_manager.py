@@ -7,13 +7,11 @@ import asyncio
 import json
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
-from sqlalchemy import and_, desc, func
 import logging
 
-from ..database.models import AgentMemory, Feedback, Task, User
-from ..database.connection import get_db
-from ..integrations.api_client import api_manager
+from src.database.models import AgentMemory, Feedback, Task, User
+from src.database.connection import mongodb
+from src.integrations.api_client import api_manager
 
 logger = logging.getLogger(__name__)
 
@@ -143,32 +141,25 @@ class MemoryManager:
         content: Dict[str, Any],
         context_tags: List[str] = None,
         relevance_score: float = 1.0,
-        db: Session = None
     ) -> bool:
         """Store a memory entry for an agent."""
         try:
-            if not db:
-                db = next(get_db())
-            
             memory_entry = AgentMemory(
                 agent_name=agent_name,
                 memory_type=memory_type,
                 content=content,
                 context_tags=context_tags or [],
                 relevance_score=relevance_score,
-                created_at=datetime.now()
+                created_at=datetime.utcnow()
             )
             
-            db.add(memory_entry)
-            db.commit()
+            await mongodb.database["agent_memory"].insert_one(memory_entry.model_dump(by_alias=True, exclude_none=True))
             
             logger.info(f"Memory stored for agent {agent_name}: {memory_type}")
             return True
             
         except Exception as e:
             logger.error(f"Memory storage error: {str(e)}")
-            if db:
-                db.rollback()
             return False
     
     async def retrieve_memories(
@@ -178,58 +169,52 @@ class MemoryManager:
         context_tags: List[str] = None,
         limit: int = 10,
         min_relevance: float = 0.5,
-        db: Session = None
     ) -> List[Dict[str, Any]]:
         """Retrieve relevant memories for an agent."""
         try:
-            if not db:
-                db = next(get_db())
-            
-            query = db.query(AgentMemory).filter(
-                and_(
-                    AgentMemory.agent_name == agent_name,
-                    AgentMemory.relevance_score >= min_relevance
-                )
-            )
+            query_filter = {
+                "agent_name": agent_name,
+                "relevance_score": {"$gte": min_relevance}
+            }
             
             if memory_type:
-                query = query.filter(AgentMemory.memory_type == memory_type)
+                query_filter["memory_type"] = memory_type
             
             if context_tags:
-                # Filter by context tags (simplified - in production, use proper array operations)
-                for tag in context_tags:
-                    query = query.filter(AgentMemory.context_tags.contains([tag]))
+                query_filter["context_tags"] = {"$all": context_tags}
             
-            memories = query.order_by(desc(AgentMemory.relevance_score), desc(AgentMemory.created_at)).limit(limit).all()
+            memories_cursor = mongodb.database["agent_memory"].find(query_filter).sort(
+                [('relevance_score', -1), ('created_at', -1)]
+            ).limit(limit)
             
-            return [
-                {
-                    "id": memory.id,
-                    "memory_type": memory.memory_type,
-                    "content": memory.content,
-                    "context_tags": memory.context_tags,
-                    "relevance_score": memory.relevance_score,
-                    "created_at": memory.created_at.isoformat()
-                }
-                for memory in memories
-            ]
+            memories = []
+            async for doc in memories_cursor:
+                memories.append({
+                    "id": str(doc["_id"]),
+                    "memory_type": doc["memory_type"],
+                    "content": doc["content"],
+                    "context_tags": doc["context_tags"],
+                    "relevance_score": doc["relevance_score"],
+                    "created_at": doc["created_at"].isoformat()
+                })
+            
+            return memories
             
         except Exception as e:
             logger.error(f"Memory retrieval error: {str(e)}")
             return []
     
-    async def process_task_feedback(self, task_id: int, db: Session = None) -> Dict[str, Any]:
+    async def process_task_feedback(self, task_id: str) -> Dict[str, Any]:
         """Process feedback for a completed task and update agent memory."""
         try:
-            if not db:
-                db = next(get_db())
-            
             # Get task and associated feedback
-            task = db.query(Task).filter(Task.id == task_id).first()
+            task = await mongodb.database["tasks"].find_one({"_id": task_id})
             if not task:
                 return {"error": "Task not found"}
+            task = Task(**task)
             
-            feedback_entries = db.query(Feedback).filter(Feedback.task_id == task_id).all()
+            feedback_entries_cursor = mongodb.database["feedback"].find({"task_id": task_id})
+            feedback_entries = [Feedback(**doc) async for doc in feedback_entries_cursor]
             
             if not feedback_entries:
                 logger.info(f"No feedback found for task {task_id}")
@@ -240,8 +225,8 @@ class MemoryManager:
             for feedback in feedback_entries:
                 # Process each feedback entry
                 feedback_data = {
-                    "task_id": task_id,
-                    "agent_name": task.agent_name,
+                    "task_id": str(task_id),
+                    "agent_name": task.assigned_agent,
                     "rating": feedback.rating,
                     "comments": feedback.comments,
                     "feedback_type": feedback.feedback_type,
@@ -253,33 +238,31 @@ class MemoryManager:
                 
                 # Store processed feedback as memory
                 await self.store_memory(
-                    agent_name=task.agent_name,
+                    agent_name=task.assigned_agent,
                     memory_type=MemoryType.FEEDBACK,
                     content=processed,
-                    context_tags=["feedback", "user_input", task.agent_name],
+                    context_tags=["feedback", "user_input", task.assigned_agent],
                     relevance_score=self._calculate_feedback_relevance(processed),
-                    db=db
                 )
             
             # Generate learning insights
             learning_insights = await self._generate_learning_insights(
-                task.agent_name, processed_feedback, db
+                task.assigned_agent, processed_feedback
             )
             
             # Store learning insights
             if learning_insights:
                 await self.store_memory(
-                    agent_name=task.agent_name,
+                    agent_name=task.assigned_agent,
                     memory_type=MemoryType.PATTERN,
                     content=learning_insights,
                     context_tags=["learning", "insights", "improvement"],
                     relevance_score=0.9,
-                    db=db
                 )
             
             return {
-                "task_id": task_id,
-                "agent_name": task.agent_name,
+                "task_id": str(task_id),
+                "agent_name": task.assigned_agent,
                 "processed_feedback_count": len(processed_feedback),
                 "learning_insights": learning_insights,
                 "status": "completed"
@@ -293,7 +276,6 @@ class MemoryManager:
         self, 
         agent_name: str, 
         processed_feedback: List[Dict[str, Any]], 
-        db: Session
     ) -> Dict[str, Any]:
         """Generate learning insights from processed feedback."""
         try:
@@ -302,7 +284,6 @@ class MemoryManager:
                 agent_name=agent_name,
                 memory_type=MemoryType.FEEDBACK,
                 limit=50,
-                db=db
             )
             
             # Prepare data for analysis
@@ -346,7 +327,7 @@ class MemoryManager:
                     "insights": insights_response["content"],
                     "feedback_count": len(processed_feedback),
                     "historical_count": len(historical_memories),
-                    "generated_at": datetime.now().isoformat(),
+                    "generated_at": datetime.utcnow().isoformat(),
                     "confidence": "high" if len(processed_feedback) >= 3 else "medium"
                 }
             else:
@@ -384,14 +365,11 @@ class LearningLoop:
     def __init__(self):
         self.memory_manager = MemoryManager()
     
-    async def run_learning_cycle(self, agent_name: str = None, db: Session = None) -> Dict[str, Any]:
+    async def run_learning_cycle(self, agent_name: str = None) -> Dict[str, Any]:
         """Run a complete learning cycle for agents."""
         try:
-            if not db:
-                db = next(get_db())
-            
             results = {
-                "cycle_started_at": datetime.now().isoformat(),
+                "cycle_started_at": datetime.utcnow().isoformat(),
                 "agents_processed": [],
                 "total_feedback_processed": 0,
                 "insights_generated": 0,
@@ -403,14 +381,15 @@ class LearningLoop:
                 agents_to_process = [agent_name]
             else:
                 # Get all agents with recent tasks
-                recent_tasks = db.query(Task.agent_name).filter(
-                    Task.created_at >= datetime.now() - timedelta(days=7)
-                ).distinct().all()
-                agents_to_process = [task.agent_name for task in recent_tasks]
+                recent_tasks_cursor = mongodb.database["tasks"].aggregate([
+                    {"$match": {"created_at": {"$gte": datetime.utcnow() - timedelta(days=7)}}},
+                    {"$group": {"_id": "$assigned_agent"}}
+                ])
+                agents_to_process = [doc["_id"] for doc in await recent_tasks_cursor.to_list(length=None) if doc["_id"] is not None]
             
             for agent in agents_to_process:
                 try:
-                    agent_result = await self._process_agent_learning(agent, db)
+                    agent_result = await self._process_agent_learning(agent)
                     results["agents_processed"].append(agent_result)
                     results["total_feedback_processed"] += agent_result.get("feedback_processed", 0)
                     if agent_result.get("insights_generated"):
@@ -421,7 +400,7 @@ class LearningLoop:
                     logger.error(error_msg)
                     results["errors"].append(error_msg)
             
-            results["cycle_completed_at"] = datetime.now().isoformat()
+            results["cycle_completed_at"] = datetime.utcnow().isoformat()
             results["success"] = len(results["errors"]) == 0
             
             return results
@@ -430,39 +409,36 @@ class LearningLoop:
             logger.error(f"Learning cycle error: {str(e)}")
             return {
                 "error": str(e),
-                "cycle_started_at": datetime.now().isoformat(),
+                "cycle_started_at": datetime.utcnow().isoformat(),
                 "success": False
             }
     
-    async def _process_agent_learning(self, agent_name: str, db: Session) -> Dict[str, Any]:
+    async def _process_agent_learning(self, agent_name: str) -> Dict[str, Any]:
         """Process learning for a specific agent."""
         try:
             # Get recent tasks with feedback for this agent
-            recent_tasks = db.query(Task).filter(
-                and_(
-                    Task.agent_name == agent_name,
-                    Task.created_at >= datetime.now() - timedelta(days=7),
-                    Task.status == "completed"
-                )
-            ).all()
+            recent_tasks_cursor = mongodb.database["tasks"].find({
+                "assigned_agent": agent_name,
+                "created_at": {"$gte": datetime.utcnow() - timedelta(days=7)},
+                "status": "completed"
+            })
+            recent_tasks = [Task(**doc) async for doc in recent_tasks_cursor]
             
             feedback_processed = 0
             insights_generated = False
             
             for task in recent_tasks:
                 # Check if task has unprocessed feedback
-                feedback_count = db.query(Feedback).filter(Feedback.task_id == task.id).count()
-                memory_count = db.query(AgentMemory).filter(
-                    and_(
-                        AgentMemory.agent_name == agent_name,
-                        AgentMemory.memory_type == MemoryType.FEEDBACK,
-                        AgentMemory.content.contains({"original_feedback": {"task_id": task.id}})
-                    )
-                ).count()
+                feedback_count = await mongodb.database["feedback"].count_documents({"task_id": task.id})
+                memory_count = await mongodb.database["agent_memory"].count_documents({
+                    "agent_name": agent_name,
+                    "memory_type": MemoryType.FEEDBACK,
+                    "content.original_feedback.task_id": str(task.id)
+                })
                 
                 if feedback_count > memory_count:
                     # Process unprocessed feedback
-                    result = await self.memory_manager.process_task_feedback(task.id, db)
+                    result = await self.memory_manager.process_task_feedback(task.id)
                     if not result.get("error"):
                         feedback_processed += feedback_count - memory_count
                         if result.get("learning_insights"):
@@ -473,7 +449,7 @@ class LearningLoop:
                 "tasks_reviewed": len(recent_tasks),
                 "feedback_processed": feedback_processed,
                 "insights_generated": insights_generated,
-                "processed_at": datetime.now().isoformat()
+                "processed_at": datetime.utcnow().isoformat()
             }
             
         except Exception as e:
@@ -481,7 +457,7 @@ class LearningLoop:
             return {
                 "agent_name": agent_name,
                 "error": str(e),
-                "processed_at": datetime.now().isoformat()
+                "processed_at": datetime.utcnow().isoformat()
             }
 
 

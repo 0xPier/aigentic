@@ -335,15 +335,7 @@ class ResearchAgent(LLMAgent):
                             "status": "error"
                         }
         
-            content_tags = soup.find_all(['p', 'article', 'main'])
-            content = ' '.join([tag.get_text().strip() for tag in content_tags[:5]])
             
-            return {
-                "url": url,
-                "title": title_text,
-                "content": content[:1000],  # Limit content length
-                "scraped_at": datetime.utcnow().isoformat()
-            }
             
         except Exception as e:
             self.logger.error(f"Failed to scrape {url}: {e}")

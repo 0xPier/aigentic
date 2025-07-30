@@ -1,8 +1,9 @@
 """Pydantic schemas for API request/response models."""
 
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from pydantic import BaseModel, EmailStr, validator
+from bson import ObjectId
 
 
 # User schemas
@@ -23,35 +24,58 @@ class UserUpdate(BaseModel):
 
 
 class UserResponse(UserBase):
-    id: int
+    id: str  # Changed from int to str to handle PyObjectId
     is_active: bool
     is_verified: bool
-    subscription_tier: str
-    subscription_status: str
     created_at: datetime
     
     class Config:
         from_attributes = True
 
 
-# Authentication schemas
-class Token(BaseModel):
-    access_token: str
-    refresh_token: Optional[str] = None
-    token_type: str
-    expires_in: Optional[int] = None
+# User Settings schemas
+class UserSettingsBase(BaseModel):
+    llm_provider: Optional[str] = "openai"
+    llm_api_key: Optional[str] = None
+    llm_api_base: Optional[str] = None
+    llm_model: Optional[str] = "gpt-3.5-turbo"
+    theme: Optional[str] = "light"
+    language: Optional[str] = "en"
+    timezone: Optional[str] = "UTC"
+    email_notifications: Optional[bool] = True
+    task_completion_notifications: Optional[bool] = True
+    project_updates_notifications: Optional[bool] = True
+    auto_save_interval: Optional[int] = 30
+    max_concurrent_tasks: Optional[int] = 3
 
-class RefreshTokenRequest(BaseModel):
-    refresh_token: str
+
+class UserSettingsCreate(UserSettingsBase):
+    pass
 
 
-class TokenData(BaseModel):
-    username: Optional[str] = None
+class UserSettingsUpdate(BaseModel):
+    llm_provider: Optional[str] = None
+    llm_api_key: Optional[str] = None
+    llm_api_base: Optional[str] = None
+    llm_model: Optional[str] = None
+    theme: Optional[str] = None
+    language: Optional[str] = None
+    timezone: Optional[str] = None
+    email_notifications: Optional[bool] = None
+    task_completion_notifications: Optional[bool] = None
+    project_updates_notifications: Optional[bool] = None
+    auto_save_interval: Optional[int] = None
+    max_concurrent_tasks: Optional[int] = None
 
 
-class LoginRequest(BaseModel):
-    username: str
-    password: str
+class UserSettingsResponse(UserSettingsBase):
+    id: int
+    user_id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
 
 
 # Project schemas

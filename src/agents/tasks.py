@@ -6,8 +6,8 @@ from typing import Dict, Any
 import traceback
 
 from src.core.celery_app import celery_app
-from src.database.connection import get_db
-from src.database.models import Task, User
+from src.database.connection import mongodb
+from src.database.models import Task, User, PyObjectId
 from src.agents.registry import get_agent_registry
 from src.agents.base import AgentContext
 
@@ -15,23 +15,26 @@ from src.agents.base import AgentContext
 @celery_app.task(bind=True)
 async def execute_orchestrator_task(self, task_id: int, task_request: Dict[str, Any]):
     """Execute a task using the orchestrator agent."""
-    db = get_db()
-    
     try:
         # Get task from database
-        task = db.query(Task).filter(Task.id == task_id).first()
-        if not task:
+        task_doc = await mongodb.database["tasks"].find_one({"_id": task_id})
+        if not task_doc:
             raise ValueError(f"Task {task_id} not found")
+        task = Task(**task_doc)
         
         # Update task status
+        await mongodb.database["tasks"].update_one(
+            {"_id": task_id},
+            {"$set": {"status": "in_progress", "started_at": datetime.utcnow()}}
+        )
         task.status = "in_progress"
         task.started_at = datetime.utcnow()
-        db.commit()
         
         # Get user
-        user = db.query(User).filter(User.id == task.user_id).first()
-        if not user:
+        user_doc = await mongodb.database["users"].find_one({"_id": task.user_id})
+        if not user_doc:
             raise ValueError(f"User {task.user_id} not found")
+        user = User(**user_doc)
         
         # Get orchestrator agent
         registry = get_agent_registry()
@@ -56,17 +59,21 @@ async def execute_orchestrator_task(self, task_id: int, task_request: Dict[str, 
         result = orchestrator.execute(context)
         
         # Update task with results
-        task.status = "completed" if result.success else "failed"
-        task.completed_at = datetime.utcnow()
-        task.execution_time = result.execution_time
-        task.result_data = result.data
-        task.output_files = result.output_files
-        task.error_message = result.error if not result.success else None
-        
-        db.commit()
+        update_data = {
+            "status": "completed" if result.success else "failed",
+            "completed_at": datetime.utcnow(),
+            "execution_time": result.execution_time,
+            "result_data": result.data,
+            "output_files": result.output_files,
+            "error_message": result.error if not result.success else None
+        }
+        await mongodb.database["tasks"].update_one(
+            {"_id": task_id},
+            {"$set": update_data}
+        )
         
         return {
-            "task_id": task_id,
+            "task_id": str(task_id),
             "success": result.success,
             "message": result.message,
             "execution_time": result.execution_time
@@ -74,12 +81,12 @@ async def execute_orchestrator_task(self, task_id: int, task_request: Dict[str, 
         
     except Exception as e:
         # Update task with error
-        task = db.query(Task).filter(Task.id == task_id).first()
-        if task:
-            task.status = "failed"
-            task.completed_at = datetime.utcnow()
-            task.error_message = str(e)
-            db.commit()
+        task_doc = await mongodb.database["tasks"].find_one({"_id": task_id})
+        if task_doc:
+            await mongodb.database["tasks"].update_one(
+                {"_id": task_id},
+                {"$set": {"status": "failed", "completed_at": datetime.utcnow(), "error_message": str(e)}}
+            )
         
         # Log error
         current_app.logger.error(f"Task {task_id} failed: {e}")
@@ -87,27 +94,26 @@ async def execute_orchestrator_task(self, task_id: int, task_request: Dict[str, 
         
         # Re-raise for Celery
         raise
-        
-    finally:
-        db.close()
 
 
 @celery_app.task(bind=True)
-async def execute_single_agent_task(self, task_id: int, agent_name: str, query: str, context_data: Dict[str, Any] = None):
+async def execute_single_agent_task(self, task_id: PyObjectId, agent_name: str, query: str, context_data: Dict[str, Any] = None):
     """Execute a task using a single specific agent."""
-    db = get_db()
-    
     try:
         # Get task from database
-        task = db.query(Task).filter(Task.id == task_id).first()
-        if not task:
+        task_doc = await mongodb.database["tasks"].find_one({"_id": task_id})
+        if not task_doc:
             raise ValueError(f"Task {task_id} not found")
+        task = Task(**task_doc)
         
         # Update task status
+        await mongodb.database["tasks"].update_one(
+            {"_id": task_id},
+            {"$set": {"status": "in_progress", "started_at": datetime.utcnow(), "assigned_agent": agent_name}}
+        )
         task.status = "in_progress"
         task.started_at = datetime.utcnow()
         task.assigned_agent = agent_name
-        db.commit()
         
         # Get agent
         registry = get_agent_registry()
@@ -132,17 +138,21 @@ async def execute_single_agent_task(self, task_id: int, agent_name: str, query: 
         result = await agent.execute(context)
         
         # Update task with results
-        task.status = "completed" if result.success else "failed"
-        task.completed_at = datetime.utcnow()
-        task.execution_time = result.execution_time
-        task.result_data = result.data
-        task.output_files = result.output_files
-        task.error_message = result.error if not result.success else None
-        
-        db.commit()
+        update_data = {
+            "status": "completed" if result.success else "failed",
+            "completed_at": datetime.utcnow(),
+            "execution_time": result.execution_time,
+            "result_data": result.data,
+            "output_files": result.output_files,
+            "error_message": result.error if not result.success else None
+        }
+        await mongodb.database["tasks"].update_one(
+            {"_id": task_id},
+            {"$set": update_data}
+        )
         
         return {
-            "task_id": task_id,
+            "task_id": str(task_id),
             "agent_name": agent_name,
             "success": result.success,
             "message": result.message,
@@ -152,12 +162,12 @@ async def execute_single_agent_task(self, task_id: int, agent_name: str, query: 
         
     except Exception as e:
         # Update task with error
-        task = db.query(Task).filter(Task.id == task_id).first()
-        if task:
-            task.status = "failed"
-            task.completed_at = datetime.utcnow()
-            task.error_message = str(e)
-            db.commit()
+        task_doc = await mongodb.database["tasks"].find_one({"_id": task_id})
+        if task_doc:
+            await mongodb.database["tasks"].update_one(
+                {"_id": task_id},
+                {"$set": {"status": "failed", "completed_at": datetime.utcnow(), "error_message": str(e)}}
+            )
         
         # Log error
         current_app.logger.error(f"Single agent task {task_id} failed: {e}")
@@ -165,43 +175,29 @@ async def execute_single_agent_task(self, task_id: int, agent_name: str, query: 
         
         # Re-raise for Celery
         raise
-        
-    finally:
-        db.close()
 
 
 @celery_app.task
-def cleanup_old_tasks():
+async def cleanup_old_tasks():
     """Cleanup old completed tasks (maintenance task)."""
-    db = get_db()
-    
     try:
         from datetime import timedelta
         
         # Delete tasks older than 30 days
         cutoff_date = datetime.utcnow() - timedelta(days=30)
         
-        old_tasks = db.query(Task).filter(
-            Task.completed_at < cutoff_date,
-            Task.status.in_(["completed", "failed"])
-        ).all()
+        result = await mongodb.database["tasks"].delete_many({
+            "completed_at": {"$lt": cutoff_date},
+            "status": {"$in": ["completed", "failed"]}
+        })
         
-        count = len(old_tasks)
-        
-        for task in old_tasks:
-            # TODO: Clean up associated files
-            db.delete(task)
-        
-        db.commit()
+        count = result.deleted_count
         
         return f"Cleaned up {count} old tasks"
         
     except Exception as e:
         current_app.logger.error(f"Cleanup task failed: {e}")
         raise
-        
-    finally:
-        db.close()
 
 
 @celery_app.task
@@ -223,26 +219,31 @@ def update_agent_memory():
 
 
 @celery_app.task
-def generate_usage_analytics():
+async def generate_usage_analytics():
     """Generate usage analytics for the platform."""
-    db = get_db()
-    
     try:
-        from sqlalchemy import func
-        
         # Get basic statistics
-        total_users = db.query(User).count()
-        total_tasks = db.query(Task).count()
-        completed_tasks = db.query(Task).filter(Task.status == "completed").count()
+        total_users = await mongodb.database["users"].count_documents({})
+        total_tasks = await mongodb.database["tasks"].count_documents({})
+        completed_tasks = await mongodb.database["tasks"].count_documents({"status": "completed"})
         
         # Get task statistics by agent
-        agent_stats = db.query(
-            Task.assigned_agent,
-            func.count(Task.id).label("total"),
-            func.count(Task.id).filter(Task.status == "completed").label("completed")
-        ).filter(
-            Task.assigned_agent.isnot(None)
-        ).group_by(Task.assigned_agent).all()
+        agent_stats_pipeline = [
+            {"$match": {"assigned_agent": {"$ne": None}}},
+            {"$group": {
+                "_id": "$assigned_agent",
+                "total": {"$sum": 1},
+                "completed": {"$sum": {"$cond": [{"$eq": ["$status", "completed"]}, 1, 0]}}
+            }}
+        ]
+        agent_stats_cursor = mongodb.database["tasks"].aggregate(agent_stats_pipeline)
+        agent_stats = []
+        async for stat in agent_stats_cursor:
+            agent_stats.append({
+                "assigned_agent": stat["_id"],
+                "total": stat["total"],
+                "completed": stat["completed"]
+            })
         
         analytics = {
             "total_users": total_users,
@@ -251,10 +252,10 @@ def generate_usage_analytics():
             "success_rate": (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0,
             "agent_statistics": [
                 {
-                    "agent": stat.assigned_agent,
-                    "total_tasks": stat.total,
-                    "completed_tasks": stat.completed,
-                    "success_rate": (stat.completed / stat.total * 100) if stat.total > 0 else 0
+                    "agent": stat["assigned_agent"],
+                    "total_tasks": stat["total"],
+                    "completed_tasks": stat["completed"],
+                    "success_rate": (stat["completed"] / stat["total"] * 100) if stat["total"] > 0 else 0
                 }
                 for stat in agent_stats
             ],
@@ -266,6 +267,3 @@ def generate_usage_analytics():
     except Exception as e:
         current_app.logger.error(f"Analytics generation failed: {e}")
         raise
-        
-    finally:
-        db.close()

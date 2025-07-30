@@ -13,7 +13,7 @@ import logging
 
 from .base import LLMAgent, AgentContext, AgentResult
 from ..integrations.api_client import api_manager
-from src.core.config import settings
+from src.core.config import app_config
 
 
 class GraphicsAgent(LLMAgent):
@@ -174,7 +174,7 @@ class GraphicsAgent(LLMAgent):
                     })
             
             # Try AI image generation if API keys are available
-            if settings.stability_api_key or settings.huggingface_api_key:
+            if app_config.stability_api_key or app_config.huggingface_api_key:
                 ai_image_result = await self._generate_ai_image(spec.get("text_content", ""), spec.get("style", "modern"))
                 if ai_image_result:
                     results["file_paths"].append(ai_image_result["filepath"])
@@ -318,9 +318,9 @@ class GraphicsAgent(LLMAgent):
             # Add title
             title = spec.get("text_content", "Infographic Title")
             try:
-                title_font = ImageFont.truetype("/System/Library/Fonts/Arial Bold.ttf", 36)
-                body_font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", 24)
-            except:
+                title_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 36)
+                body_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24)
+            except IOError:
                 title_font = ImageFont.load_default()
                 body_font = ImageFont.load_default()
             
