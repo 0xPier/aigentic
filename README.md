@@ -1,65 +1,62 @@
-# AI Agent Platform (aigentic)
+# AI Agent Platform
 
-A full-stack AI Agent Platform built with Next.js, FastAPI, and MongoDB. This platform provides a comprehensive solution for managing AI agents, tasks, and projects with a modern web interface and robust backend infrastructure.
+A comprehensive multi-agent AI platform built with FastAPI, Next.js, and MongoDB. This platform enables you to create, manage, and orchestrate AI agents for various tasks including research, content creation, data analysis, and automation.
 
 ## 🚀 Features
 
-### Frontend (Next.js)
-- **Modern UI** with Material-UI components
-- **Responsive Design** that works on all devices
-- **Navigation System** with sidebar and routing
-- **Dashboard** with real-time statistics
-- **Task Management** interface
-- **Agent Management** system
-- **Project Organization** tools
-- **Settings & Configuration** panels
-- **Integration Management** for external services
+### Core Platform
+- **Multi-Agent System**: 11 specialized AI agents for different tasks
+- **Task Management**: Create, assign, and track AI-powered tasks
+- **Project Organization**: Group tasks into projects for better organization
+- **Real-time Dashboard**: Monitor agent performance and system status
+- **API-First Design**: RESTful API for easy integration
+- **Modern UI**: React-based frontend with Material-UI components
 
-### Backend (FastAPI)
-- **RESTful API** with automatic documentation
-- **MongoDB Integration** with async operations
-- **User Authentication** and authorization
-- **Task Processing** with Celery and Redis
-- **Real-time Updates** for dashboard statistics
-- **Modular Architecture** with clean separation of concerns
-- **Docker Support** for easy deployment
+### AI Agents
+- **Research Agent**: Web scraping, market research, trend analysis
+- **Analysis Agent**: Data processing, statistical analysis, insights generation
+- **Content Agent**: Blog writing, article creation, SEO optimization
+- **Social Media Agent**: Twitter/Telegram management, engagement tracking
+- **Graphics Agent**: Image generation, poster creation, visual content
+- **Presentation Agent**: PowerPoint creation, slide design, PDF generation
+- **Automation Agent**: CRM integration, workflow automation, API calls
+- **Reporting Agent**: Dashboard creation, KPI tracking, analytics reporting
+- **Customer Care Agent**: Chatbot creation, support automation
+- **Recommendation Agent**: Strategic planning, decision support
+- **Orchestrator Agent**: Task coordination and delegation
 
-### Infrastructure
-- **Docker Compose** for multi-service orchestration
-- **Nginx Proxy** for routing and load balancing
-- **Redis** for caching and task queuing
-- **MongoDB** for data persistence
-- **Environment-based Configuration**
+### Technical Features
+- **Docker Support**: Complete containerization for easy deployment
+- **MongoDB Database**: Scalable NoSQL database for data storage
+- **Redis Caching**: High-performance caching layer
+- **Celery Tasks**: Asynchronous task processing
+- **CORS Support**: Cross-origin resource sharing enabled
+- **Health Checks**: System monitoring and status endpoints
 
 ## 🛠️ Tech Stack
 
-### Frontend
-- **Next.js 14** - React framework with SSR support
-- **Material-UI (MUI) v5** - Modern React UI library
-- **Emotion** - CSS-in-JS styling
-- **Axios** - HTTP client for API calls
-- **React Query** - Data fetching and caching
-
 ### Backend
-- **FastAPI** - Modern Python web framework
-- **PyMongo** - MongoDB driver with async support
-- **Pydantic** - Data validation and settings management
-- **Celery** - Distributed task queue
-- **Redis** - In-memory data structure store
-- **CrewAI** - AI agent orchestration
+- **FastAPI**: Modern Python web framework
+- **MongoDB**: NoSQL database
+- **Redis**: Caching and message broker
+- **Celery**: Asynchronous task queue
+- **Motor**: Async MongoDB driver
 
-### Database & Infrastructure
-- **MongoDB** - NoSQL database
-- **Redis** - Cache and message broker
-- **Docker & Docker Compose** - Containerization
-- **Nginx** - Reverse proxy and load balancer
+### Frontend
+- **Next.js**: React framework
+- **Material-UI**: React component library
+- **Axios**: HTTP client
+
+### Infrastructure
+- **Docker**: Containerization
+- **Docker Compose**: Multi-container orchestration
+- **Nginx**: Reverse proxy and load balancer
 
 ## 📋 Prerequisites
 
-- **Docker** and **Docker Compose**
-- **Node.js** 18+ (for local development)
-- **Python** 3.11+ (for local development)
-- **Git**
+- Docker and Docker Compose
+- Git
+- At least 4GB RAM available for containers
 
 ## 🚀 Quick Start
 
@@ -69,146 +66,167 @@ git clone https://github.com/0xPier/aigentic.git
 cd aigentic
 ```
 
-### 2. Environment Setup
+### 2. Configure Environment
+Copy the example environment file and configure your settings:
 ```bash
-# Copy environment files
 cp .env.example .env
-cp nextjs-frontend/.env.local.example nextjs-frontend/.env.local
-
-# Update environment variables as needed
 ```
 
-### 3. Start with Docker (Recommended)
-```bash
-# Start all services
-docker-compose up -d
-
-# Check service status
-docker-compose ps
-```
-
-### 4. Access the Application
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8080/api
-- **API Documentation**: http://localhost:8080/docs
-
-## 🔧 Development Setup
-
-### Frontend Development
-```bash
-cd nextjs-frontend
-npm install
-npm run dev
-```
-
-### Backend Development
-```bash
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Start FastAPI development server
-uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-### Database Setup
-```bash
-# Start MongoDB and Redis
-docker-compose up mongo redis -d
-```
-
-## 📁 Project Structure
-
-```
-aigentic/
-├── nextjs-frontend/          # Next.js frontend application
-│   ├── components/           # Reusable UI components
-│   ├── pages/               # Next.js pages and routing
-│   ├── src/                 # Utilities and configurations
-│   └── styles/              # Global styles
-├── src/                     # FastAPI backend application
-│   ├── api/                 # API routes and endpoints
-│   ├── core/                # Core configurations
-│   ├── database/            # Database models and connections
-│   ├── agents/              # AI agent implementations
-│   └── services/            # Business logic services
-├── nginx/                   # Nginx configuration
-├── docker-compose.yml       # Multi-service orchestration
-└── requirements.txt         # Python dependencies
-```
-
-## 🔌 API Endpoints
-
-### Core Endpoints
-- `GET /api/dashboard/` - Dashboard statistics
-- `GET /api/tasks/` - List tasks
-- `POST /api/tasks/` - Create new task
-- `GET /api/agents/` - List agents
-- `POST /api/agents/` - Create new agent
-- `GET /api/projects/` - List projects
-- `POST /api/projects/` - Create new project
-
-### Authentication
-- `POST /api/auth/login` - User login
-- `POST /api/auth/register` - User registration
-- `POST /api/auth/refresh` - Refresh token
-
-## 🐳 Docker Services
-
-| Service | Port | Description |
-|---------|------|-------------|
-| nextjs_frontend | 3000 | Next.js frontend application |
-| backend | 8000 | FastAPI backend API |
-| nginx | 8080 | Reverse proxy and load balancer |
-| mongo | 27017 | MongoDB database |
-| redis | 6379 | Redis cache and message broker |
-| celery_worker | - | Background task processor |
-| celery_beat | - | Scheduled task manager |
-
-## 🔒 Environment Variables
-
-### Backend (.env)
-```bash
+Edit `.env` file with your configuration:
+```env
+# Application Settings
 ENVIRONMENT=development
+DEBUG=True
+
+# Database Configuration
 DATABASE_URL=mongodb://mongo:27017/agentic_platform
+
+# Redis Configuration
 REDIS_URL=redis://redis:6379/0
-SECRET_KEY=your-secret-key
+
+# API Configuration
 API_HOST=0.0.0.0
 API_PORT=8000
+API_URL=http://localhost:8000/api
+
+# Frontend Configuration
+FRONTEND_URL=http://localhost:3000
+
+# Security
+SECRET_KEY=your-secret-key-here
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
+
+# LLM Configuration
+LLM_PROVIDER=openai
+OPENAI_API_KEY=your-openai-api-key
+OPENAI_API_BASE=https://api.openai.com/v1
 ```
 
-### Frontend (.env.local)
+### 3. Start the Application
 ```bash
-NEXT_PUBLIC_API_URL=http://localhost:8080
+docker-compose up --build -d
 ```
 
-## 🧪 Testing
+### 4. Access the Platform
+- **Main Application**: http://localhost:8080
+- **Frontend Direct**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **API Documentation**: http://localhost:8000/docs
 
-### Run Backend Tests
+## 📚 API Documentation
+
+The API is fully documented with OpenAPI/Swagger. Access the interactive documentation at:
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+### Key Endpoints
+- `GET /health` - Health check
+- `GET /api/agents/` - List all agents
+- `GET /api/agents/performance` - Agent performance metrics
+- `GET /api/dashboard/` - Dashboard data
+- `GET /api/tasks/` - List tasks
+- `POST /api/tasks/` - Create new task
+
+## 🏗️ Architecture
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Frontend      │    │   Nginx Proxy   │    │   Backend API   │
+│   (Next.js)     │◄──►│   (Port 8080)   │◄──►│   (FastAPI)     │
+│   (Port 3000)   │    │                 │    │   (Port 8000)   │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                                       │
+                       ┌─────────────────┐    ┌─────────────────┐
+                       │   MongoDB       │    │   Redis         │
+                       │   (Port 27017)  │    │   (Port 6379)   │
+                       └─────────────────┘    └─────────────────┘
+                                                       │
+                                              ┌─────────────────┐
+                                              │   Celery        │
+                                              │   Workers       │
+                                              └─────────────────┘
+```
+
+## 🔧 Development
+
+### Running in Development Mode
 ```bash
-pytest tests/
+# Start all services
+docker-compose up --build -d
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
 ```
 
-### Run Frontend Tests
+### Testing the Application
 ```bash
-cd nextjs-frontend
-npm test
+# Test API endpoints
+curl http://localhost:8000/health
+curl http://localhost:8000/api/agents/
+
+# Test frontend
+curl http://localhost:3000
 ```
 
-## 🚀 Deployment
-
-### Production Deployment
-1. Update environment variables for production
-2. Build and deploy with Docker Compose:
+### Database Management
 ```bash
-docker-compose -f docker-compose.prod.yml up -d
+# Access MongoDB shell
+docker exec -it agentic_mongo mongosh
+
+# Backup database
+docker exec agentic_mongo mongodump --out /backup
+
+# Restore database
+docker exec agentic_mongo mongorestore /backup
 ```
 
-### Environment-specific Configurations
-- Development: Local setup with hot reload
-- Staging: Docker setup with staging data
-- Production: Optimized builds with production database
+## 🐛 Troubleshooting
 
-## 🤝 Contributing
+### Common Issues
+
+1. **Port Already in Use**
+   ```bash
+   # Check what's using the port
+   lsof -i :8080
+   # Kill the process or change ports in docker-compose.yml
+   ```
+
+2. **MongoDB Connection Issues**
+   ```bash
+   # Check MongoDB logs
+   docker-compose logs mongo
+   # Ensure DATABASE_URL is correct in .env
+   ```
+
+3. **Frontend Not Loading**
+   ```bash
+   # Check frontend logs
+   docker-compose logs nextjs_frontend
+   # Rebuild frontend
+   docker-compose up --build -d nextjs_frontend
+   ```
+
+4. **CORS Issues**
+   - Ensure nginx configuration is correct
+   - Check that frontend is accessing the correct API URL
+   - Verify CORS settings in backend configuration
+
+### Health Checks
+```bash
+# Check all container status
+docker-compose ps
+
+# Check specific service logs
+docker-compose logs backend
+docker-compose logs frontend
+docker-compose logs nginx
+```
+
+## 📝 Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -216,52 +234,28 @@ docker-compose -f docker-compose.prod.yml up -d
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📝 License
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🆘 Support
+## 🤝 Support
 
-- **Documentation**: Check the `/docs` endpoint for API documentation
-- **Issues**: Report bugs and feature requests via GitHub Issues
-- **Discussions**: Use GitHub Discussions for questions and ideas
+If you encounter any issues or have questions:
+1. Check the [Issues](https://github.com/0xPier/aigentic/issues) page
+2. Create a new issue with detailed information
+3. Include logs and error messages
 
 ## 🎯 Roadmap
 
-- [ ] Advanced AI agent capabilities
-- [ ] Real-time collaboration features
-- [ ] Mobile application
-- [ ] Advanced analytics and reporting
-- [ ] Integration with more AI services
-- [ ] Multi-tenancy support
-- [ ] Advanced security features
-
-## 📊 Features in Detail
-
-### Dashboard
-- Real-time task statistics
-- Agent performance metrics
-- Project progress tracking
-- System health monitoring
-
-### Task Management
-- Create and assign tasks to agents
-- Monitor task execution
-- View task history and logs
-- Task scheduling and automation
-
-### Agent Management
-- Deploy and configure AI agents
-- Monitor agent performance
-- Agent capability management
-- Custom agent creation
-
-### Project Organization
-- Create and manage projects
-- Team collaboration tools
-- Resource allocation
-- Progress tracking
+- [ ] Add more AI agents (translation, code generation, etc.)
+- [ ] Implement agent learning and improvement
+- [ ] Add user authentication and authorization
+- [ ] Create agent marketplace
+- [ ] Add real-time notifications
+- [ ] Implement advanced analytics and reporting
+- [ ] Add mobile application
+- [ ] Create deployment guides for cloud platforms
 
 ---
 
-Built with ❤️ by the AI Agent Platform Team
+**Built with ❤️ using modern web technologies**
