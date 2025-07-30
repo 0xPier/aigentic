@@ -5,29 +5,42 @@ import { apiCall } from '../src/utils/api';
 export default function Agents() {
   const [agents, setAgents] = useState([]);
   const [performance, setPerformance] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
+    async function fetchAgents() {
+      try {
+        setError(null);
+        const data = await apiCall('/agents/');
+        setAgents(data);
+      } catch (error) {
+        setError('Failed to load agents: ' + error.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    async function fetchPerformance() {
+      try {
+        const data = await apiCall('/agents/performance');
+        setPerformance(data.agent_performance || []);
+      } catch (error) {
+        setError('Failed to load performance data: ' + error.message);
+      }
+    }
+
     fetchAgents();
     fetchPerformance();
   }, []);
 
-  const fetchAgents = async () => {
-    try {
-      const data = await apiCall('/agents/available');
-      setAgents(data.agents);
-    } catch (error) {
-      console.error('Error fetching agents:', error);
-    }
-  };
+  if (loading) {
+    return <Box>Loading...</Box>;
+  }
 
-  const fetchPerformance = async () => {
-    try {
-      const data = await apiCall('/agents/performance');
-      setPerformance(data.agent_performance);
-    } catch (error) {
-      console.error('Error fetching performance:', error);
-    }
-  };
+  if (error) {
+    return <Box color="error">{error}</Box>;
+  }
 
   return (
     <Box>

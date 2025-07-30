@@ -1,5 +1,14 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
+// Simple error logger that could be extended to send to logging service
+const logError = (context, error) => {
+  // In production, this could send to a logging service like Sentry
+  if (process.env.NODE_ENV === 'development') {
+    console.error(`[API Error] ${context}:`, error);
+  }
+  // Could add error reporting service here
+};
+
 export const apiCall = async (endpoint, options = {}) => {
   const url = `${API_BASE_URL}/api${endpoint}`;
   
@@ -26,7 +35,7 @@ export const apiCall = async (endpoint, options = {}) => {
 
     return await response.json();
   } catch (error) {
-    console.error(`API call failed for ${url}:`, error);
+    logError(`API call failed for ${url}`, error);
     throw error;
   }
 }; 

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import os
 from typing import Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 
 from src.agents.base import LLMAgent, AgentContext, AgentResult
@@ -157,36 +157,79 @@ class ReportingAgent(LLMAgent):
         }
     
     def _generate_metric_data(self, metric: str, time_period: str) -> Dict[str, Any]:
-        """Generate mock data for a specific metric."""
-        import numpy as np
+        """Generate real metric data from database."""
+        from src.database.connection import mongodb
+        import asyncio
         
-        # Generate time series data
-        if time_period == "last_30_days":
-            dates = pd.date_range(end=datetime.now(), periods=30, freq='D')
-        elif time_period == "last_12_months":
-            dates = pd.date_range(end=datetime.now(), periods=12, freq='M')
-        else:
-            dates = pd.date_range(end=datetime.now(), periods=7, freq='D')
+        async def get_real_metrics():
+            db = mongodb.database
+            end_date = datetime.now()
+            
+            # Calculate date range based on time_period
+            if time_period == "last_30_days":
+                start_date = end_date - timedelta(days=30)
+                dates = pd.date_range(start=start_date, end=end_date, freq='D')
+            elif time_period == "last_12_months":
+                start_date = end_date - timedelta(days=365)
+                dates = pd.date_range(start=start_date, end=end_date, freq='M')
+            else:
+                start_date = end_date - timedelta(days=7)
+                dates = pd.date_range(start=start_date, end=end_date, freq='D')
+            
+            # Query database for real metrics based on metric type
+            if metric in ["revenue", "sales"]:
+                # Query financial data from database
+                pipeline = [
+                    {"$match": {"date": {"$gte": start_date, "$lte": end_date}, "type": metric}},
+                    {"$group": {"_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$date"}}, "value": {"$sum": "$amount"}}},
+                    {"$sort": {"_id": 1}}
+                ]
+                cursor = db.financial_metrics.aggregate(pipeline)
+                results = await cursor.to_list(length=None)
+            elif metric in ["conversion_rate", "satisfaction"]:
+                # Query performance metrics
+                pipeline = [
+                    {"$match": {"date": {"$gte": start_date, "$lte": end_date}, "metric": metric}},
+                    {"$group": {"_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$date"}}, "value": {"$avg": "$value"}}},
+                    {"$sort": {"_id": 1}}
+                ]
+                cursor = db.performance_metrics.aggregate(pipeline)
+                results = await cursor.to_list(length=None)
+            else:
+                # Query general metrics
+                pipeline = [
+                    {"$match": {"date": {"$gte": start_date, "$lte": end_date}, "metric": metric}},
+                    {"$group": {"_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$date"}}, "value": {"$sum": "$value"}}},
+                    {"$sort": {"_id": 1}}
+                ]
+                cursor = db.general_metrics.aggregate(pipeline)
+                results = await cursor.to_list(length=None)
+            
+            # Convert results to lists
+            if results:
+                values = [r["value"] for r in results]
+                result_dates = [r["_id"] for r in results]
+            else:
+                # If no data in database, return empty structure
+                values = [0] * len(dates)
+                result_dates = dates.strftime('%Y-%m-%d').tolist()
+            
+            return {
+                "dates": result_dates,
+                "values": values,
+                "current_value": float(values[-1]) if values else 0.0,
+                "previous_value": float(values[-2]) if len(values) > 1 else 0.0,
+                "trend": "up" if len(values) > 1 and values[-1] > values[0] else "down",
+                "change_percent": float((values[-1] - values[0]) / values[0] * 100) if values and values[0] != 0 else 0.0
+            }
         
-        # Generate values based on metric type
-        if metric in ["revenue", "sales"]:
-            values = np.random.normal(10000, 2000, len(dates))
-            values = np.maximum(values, 0)  # Ensure positive values
-        elif metric in ["conversion_rate", "satisfaction"]:
-            values = np.random.normal(0.75, 0.1, len(dates))
-            values = np.clip(values, 0, 1)  # Keep between 0 and 1
-        else:
-            values = np.random.normal(100, 20, len(dates))
-            values = np.maximum(values, 0)
-        
-        return {
-            "dates": dates.strftime('%Y-%m-%d').tolist(),
-            "values": values.tolist(),
-            "current_value": float(values[-1]),
-            "previous_value": float(values[-2]) if len(values) > 1 else float(values[-1]),
-            "trend": "up" if values[-1] > values[0] else "down",
-            "change_percent": float((values[-1] - values[0]) / values[0] * 100) if values[0] != 0 else 0
-        }
+        # Run async function in sync context
+        try:
+            loop = asyncio.get_event_loop()
+            return loop.run_until_complete(get_real_metrics())
+        except RuntimeError:
+            # If no event loop, create one
+            return asyncio.run(get_real_metrics())
     
     async def _generate_data_summary(self, metrics: Dict[str, Any]) -> str:
         """Generate a summary of the report data."""

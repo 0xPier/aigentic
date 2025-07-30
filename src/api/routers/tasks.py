@@ -17,7 +17,7 @@ async def get_task_for_user(
 ) -> Task:
     """Dependency to get a task and verify ownership."""
     task_collection = mongodb.database["tasks"]
-    task_doc = task_collection.find_one({"_id": task_id, "user_id": current_user.id})
+    task_doc = await task_collection.find_one({"_id": task_id, "user_id": current_user.id})
     
     if not task_doc:
         raise HTTPException(
@@ -37,7 +37,7 @@ async def create_task(
     # Verify project ownership if project_id is provided
     if task_data.project_id:
         project_collection = db["projects"]
-        project_doc = project_collection.find_one({"_id": task_data.project_id, "owner_id": current_user.id})
+        project_doc = await project_collection.find_one({"_id": task_data.project_id, "owner_id": current_user.id})
         if not project_doc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -98,7 +98,7 @@ async def update_task(
         {"$set": update_data}
     )
     
-    updated_task_doc = task_collection.find_one({"_id": task.id})
+    updated_task_doc = await task_collection.find_one({"_id": task.id})
     return Task(**updated_task_doc)
 
 

@@ -1,37 +1,61 @@
-fastapi==0.116.1
+# Core FastAPI & Web Framework
+fastapi==0.115.9
 uvicorn[standard]==0.32.0
+python-multipart==0.0.6
+
+# Data Validation & Settings
 pydantic==2.11.7
 pydantic-settings==2.10.1
-pymongo==4.13.2
-python-multipart==0.0.6
 python-decouple==3.8
+
+# Security & Authentication  
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 email-validator==2.1.1
-crewai==0.148.0
-openai==1.97.0
+
+# Database - MongoDB (both sync and async support)
+pymongo==4.13.2
+motor==3.7.1
+
+# Task Queue & Caching
 celery==5.4.0
 redis==5.0.7
 celery-redbeat==2.2.0
+
+# AI/LLM Integrations
+crewai==0.148.0
+openai==1.97.0
+
+# Data Analysis & Processing
 pandas==2.2.3
 numpy==1.25.2
-matplotlib==3.8.2
-seaborn==0.13.0
 nltk==3.8.1
+
+# Data Visualization
+matplotlib==3.8.2
+seaborn==0.13.2
+
+# Web Scraping & Automation
+selenium==4.18.1
+webdriver-manager==4.0.1
+
+# HTTP Requests & Web Scraping  
+requests==2.31.0
+aiohttp==3.10.0
+beautifulsoup4==4.12.2
+
+# Social Media APIs
 tweepy==4.14.0
 python-telegram-bot==22.3
-Pillow==10.1.0
+
+# Document Processing
 python-pptx==0.6.23
 reportlab==4.0.7
 fpdf2==2.7.6
-requests==2.31.0
-beautifulsoup4==4.12.2
-selenium==4.16.0
-webdriver-manager==4.0.1
-stability-sdk==0.8.6
-diffusers==0.24.0
+Pillow==10.1.0
+
+# Development & Testing
 pytest==7.4.3
 pytest-asyncio==0.21.1
 black==23.11.0
 flake8==6.1.0
-pre-commit==3.6.0

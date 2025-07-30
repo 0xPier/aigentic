@@ -81,7 +81,7 @@ async def update_dashboard_stats(user_id):
     ]
     
     # Use pymongo's async aggregation with proper cursor handling
-    cursor = await db.tasks.aggregate(task_stats_pipeline)
+    cursor = db.tasks.aggregate(task_stats_pipeline)
     task_stats_result = []
     async for doc in cursor:
         task_stats_result.append(doc)

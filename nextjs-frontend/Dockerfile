@@ -4,10 +4,10 @@ FROM node:18-alpine AS builder
 WORKDIR /app
 
 # Copy package.json and package-lock.json (if exists)
-COPY package.json yarn.lock* package-lock.json* ./
+COPY package.json package-lock.json* ./
 
 # Install dependencies
-RUN npm install --frozen-lockfile
+RUN npm ci --only=production
 
 # Copy the rest of the application code
 COPY . .
@@ -22,9 +22,18 @@ WORKDIR /app
 
 # Set environment variables for production
 ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 
-# Copy the standalone output
-COPY --from=builder /app/.next/standalone ./ 
+# Add a non-root user
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Copy the standalone output and static files
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+USER nextjs
 
 # Expose the port Next.js runs on
 EXPOSE 3000

@@ -7,19 +7,24 @@ export default function Tasks() {
   const [open, setOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [isEdit, setIsEdit] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    async function fetchTasks() {
+      try {
+        setError(null);
+        const data = await apiCall('/tasks/');
+        setTasks(data);
+      } catch (error) {
+        setError('Failed to load tasks: ' + error.message);
+      } finally {
+        setLoading(false);
+      }
+    }
     fetchTasks();
   }, []);
-
-  const fetchTasks = async () => {
-    try {
-      const data = await apiCall('/tasks');
-      setTasks(data);
-    } catch (error) {
-      console.error('Error fetching tasks:', error);
-    }
-  };
 
   const handleOpen = (task = null) => {
     setSelectedTask(task);
@@ -33,27 +38,40 @@ export default function Tasks() {
   };
 
   const handleSave = async () => {
+    setSaving(true);
+    setError(null);
     try {
-      const method = isEdit ? 'PUT' : 'POST';
-      const endpoint = isEdit ? `/tasks/${selectedTask.id}` : '/tasks';
-      await apiCall(endpoint, {
-        method,
-        body: JSON.stringify(selectedTask),
-      });
-      
-      fetchTasks();
-      handleClose();
+      if (selectedTask.id) {
+        await apiCall(`/tasks/${selectedTask.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(selectedTask),
+        });
+      } else {
+        await apiCall('/tasks/', {
+          method: 'POST',
+          body: JSON.stringify(selectedTask),
+        });
+      }
+      // Refresh tasks list
+      const data = await apiCall('/tasks/');
+      setTasks(data);
+      setSelectedTask(null);
     } catch (error) {
-      console.error('Error saving task:', error);
+      setError('Failed to save task: ' + error.message);
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDelete = async (id) => {
     try {
+      setError(null);
       await apiCall(`/tasks/${id}`, { method: 'DELETE' });
-      fetchTasks();
+      // Refresh tasks list
+      const data = await apiCall('/tasks/');
+      setTasks(data);
     } catch (error) {
-      console.error('Error deleting task:', error);
+      setError('Failed to delete task: ' + error.message);
     }
   };
 

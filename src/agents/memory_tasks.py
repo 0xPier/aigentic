@@ -10,7 +10,7 @@ from typing import Dict, Any, List
 import logging
 
 from src.core.celery_app import celery_app
-from src.database.connection import get_db
+from src.database.connection import mongodb
 from src.database.models import Task, Feedback, AgentMemory, User
 from src.agents.memory_manager import memory_manager, learning_loop, feedback_processor
 
@@ -36,9 +36,8 @@ def process_task_feedback_async(self, task_id: int):
         asyncio.set_event_loop(loop)
         
         try:
-            db = next(get_db())
             result = loop.run_until_complete(
-                memory_manager.process_task_feedback(task_id, db)
+                memory_manager.process_task_feedback(task_id, mongodb.database)
             )
             
             logger.info(f"Feedback processing completed for task {task_id}: {result}")
@@ -83,9 +82,8 @@ def run_learning_cycle_async(self, agent_name: str = None):
         asyncio.set_event_loop(loop)
         
         try:
-            db = next(get_db())
             result = loop.run_until_complete(
-                learning_loop.run_learning_cycle(agent_name, db)
+                learning_loop.run_learning_cycle(agent_name, mongodb.database)
             )
             
             logger.info(f"Learning cycle completed: {result}")
@@ -120,47 +118,23 @@ def cleanup_old_memories():
     try:
         logger.info("Starting memory cleanup task")
         
-        db = next(get_db())
-        
         # Delete memories older than 90 days with low relevance
-        cutoff_date = datetime.now() - timedelta(days=90)
+        cutoff_date = datetime.utcnow() - timedelta(days=90)
         
-        old_memories = db.query(AgentMemory).filter(
-            AgentMemory.created_at < cutoff_date,
-            AgentMemory.relevance_score < 0.3
-        )
+        # Run the async function in a new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         
-        count_before = old_memories.count()
-        old_memories.delete()
-        db.commit()
-        
-        logger.info(f"Cleaned up {count_before} old memories")
-        
-        # Update relevance scores based on recent usage patterns
-        recent_memories = db.query(AgentMemory).filter(
-            AgentMemory.created_at >= datetime.now() - timedelta(days=30)
-        ).all()
-        
-        updated_count = 0
-        for memory in recent_memories:
-            # Decay relevance score over time
-            days_old = (datetime.now() - memory.created_at).days
-            decay_factor = max(0.1, 1.0 - (days_old * 0.01))  # 1% decay per day
+        try:
+            result = loop.run_until_complete(
+                memory_manager.cleanup_old_memories(cutoff_date, mongodb.database)
+            )
             
-            new_score = memory.relevance_score * decay_factor
-            if abs(new_score - memory.relevance_score) > 0.05:  # Only update if significant change
-                memory.relevance_score = new_score
-                updated_count += 1
-        
-        if updated_count > 0:
-            db.commit()
-            logger.info(f"Updated relevance scores for {updated_count} memories")
-        
-        return {
-            "memories_deleted": count_before,
-            "relevance_scores_updated": updated_count,
-            "cleanup_completed_at": datetime.now().isoformat()
-        }
+            logger.info(f"Memory cleanup completed: {result}")
+            return result
+            
+        finally:
+            loop.close()
         
     except Exception as e:
         logger.error(f"Memory cleanup failed: {str(e)}")
@@ -179,112 +153,20 @@ def generate_performance_insights():
     try:
         logger.info("Starting performance insights generation")
         
-        db = next(get_db())
+        # Run the async function in a new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         
-        # Get performance data for all agents
-        agents_data = {}
-        
-        # Query recent tasks and feedback
-        recent_tasks = db.query(Task).filter(
-            Task.created_at >= datetime.now() - timedelta(days=30)
-        ).all()
-        
-        for task in recent_tasks:
-            agent_name = task.agent_name
-            if agent_name not in agents_data:
-                agents_data[agent_name] = {
-                    "total_tasks": 0,
-                    "completed_tasks": 0,
-                    "failed_tasks": 0,
-                    "avg_execution_time": 0,
-                    "feedback_ratings": [],
-                    "memory_entries": 0
-                }
-            
-            agents_data[agent_name]["total_tasks"] += 1
-            
-            if task.status == "completed":
-                agents_data[agent_name]["completed_tasks"] += 1
-                if task.execution_time:
-                    agents_data[agent_name]["avg_execution_time"] += task.execution_time
-            elif task.status == "failed":
-                agents_data[agent_name]["failed_tasks"] += 1
-            
-            # Get feedback for this task
-            feedback_entries = db.query(Feedback).filter(Feedback.task_id == task.id).all()
-            for feedback in feedback_entries:
-                if feedback.rating:
-                    agents_data[agent_name]["feedback_ratings"].append(feedback.rating)
-        
-        # Calculate averages and get memory counts
-        for agent_name, data in agents_data.items():
-            if data["completed_tasks"] > 0:
-                data["avg_execution_time"] = data["avg_execution_time"] / data["completed_tasks"]
-                data["success_rate"] = data["completed_tasks"] / data["total_tasks"]
-            else:
-                data["success_rate"] = 0
-            
-            if data["feedback_ratings"]:
-                data["avg_rating"] = sum(data["feedback_ratings"]) / len(data["feedback_ratings"])
-            else:
-                data["avg_rating"] = 0
-            
-            # Get memory count
-            memory_count = db.query(AgentMemory).filter(
-                AgentMemory.agent_name == agent_name
-            ).count()
-            data["memory_entries"] = memory_count
-        
-        # Generate insights using the data
-        insights = {
-            "generated_at": datetime.now().isoformat(),
-            "period_days": 30,
-            "agents_analyzed": len(agents_data),
-            "top_performers": [],
-            "improvement_needed": [],
-            "system_recommendations": []
-        }
-        
-        # Identify top performers and those needing improvement
-        for agent_name, data in agents_data.items():
-            performance_score = (
-                data["success_rate"] * 0.4 +
-                (data["avg_rating"] / 5.0) * 0.4 +
-                (1.0 if data["avg_execution_time"] < 30 else 0.5) * 0.2
+        try:
+            result = loop.run_until_complete(
+                memory_manager.generate_performance_insights(mongodb.database)
             )
             
-            agent_summary = {
-                "agent_name": agent_name,
-                "performance_score": performance_score,
-                "success_rate": data["success_rate"],
-                "avg_rating": data["avg_rating"],
-                "total_tasks": data["total_tasks"]
-            }
+            logger.info(f"Performance insights generated: {result}")
+            return result
             
-            if performance_score >= 0.8:
-                insights["top_performers"].append(agent_summary)
-            elif performance_score < 0.6:
-                insights["improvement_needed"].append(agent_summary)
-        
-        # Generate system recommendations
-        total_tasks = sum(data["total_tasks"] for data in agents_data.values())
-        total_failed = sum(data["failed_tasks"] for data in agents_data.values())
-        
-        if total_tasks > 0:
-            system_failure_rate = total_failed / total_tasks
-            if system_failure_rate > 0.1:
-                insights["system_recommendations"].append(
-                    f"High system failure rate ({system_failure_rate:.1%}). Review error handling and API reliability."
-                )
-        
-        avg_ratings = [data["avg_rating"] for data in agents_data.values() if data["avg_rating"] > 0]
-        if avg_ratings and sum(avg_ratings) / len(avg_ratings) < 3.5:
-            insights["system_recommendations"].append(
-                "Overall user satisfaction is below target. Focus on quality improvements."
-            )
-        
-        logger.info(f"Performance insights generated for {len(agents_data)} agents")
-        return insights
+        finally:
+            loop.close()
         
     except Exception as e:
         logger.error(f"Performance insights generation failed: {str(e)}")
@@ -303,37 +185,20 @@ def schedule_learning_cycles():
     try:
         logger.info("Scheduling learning cycles for active agents")
         
-        db = next(get_db())
+        # Run the async function in a new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         
-        # Get agents that have had activity in the last 7 days
-        active_agents = db.query(Task.agent_name).filter(
-            Task.created_at >= datetime.now() - timedelta(days=7)
-        ).distinct().all()
-        
-        scheduled_tasks = []
-        
-        for agent_tuple in active_agents:
-            agent_name = agent_tuple[0]
-            
-            # Schedule learning cycle with delay to spread load
-            task_result = run_learning_cycle_async.apply_async(
-                args=[agent_name],
-                countdown=len(scheduled_tasks) * 60  # 1 minute delay between each
+        try:
+            result = loop.run_until_complete(
+                learning_loop.schedule_learning_cycles(mongodb.database)
             )
             
-            scheduled_tasks.append({
-                "agent_name": agent_name,
-                "task_id": task_result.id,
-                "scheduled_at": datetime.now().isoformat()
-            })
-        
-        logger.info(f"Scheduled learning cycles for {len(scheduled_tasks)} agents")
-        
-        return {
-            "scheduled_count": len(scheduled_tasks),
-            "scheduled_tasks": scheduled_tasks,
-            "scheduled_at": datetime.now().isoformat()
-        }
+            logger.info(f"Learning cycles scheduled: {result}")
+            return result
+            
+        finally:
+            loop.close()
         
     except Exception as e:
         logger.error(f"Learning cycle scheduling failed: {str(e)}")

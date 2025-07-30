@@ -353,11 +353,131 @@ class ImageGenerationClient:
             }
 
 
+class OllamaClient:
+    """Ollama API client for local LLM operations."""
+    
+    def __init__(self, base_url: str = None):
+        self.base_url = base_url or app_config.ollama_base_url
+        if not self.base_url:
+            logger.warning("Ollama base URL not configured. Ollama features may not work.")
+    
+    async def chat_completion(
+        self, 
+        messages: List[Dict[str, str]], 
+        model: str = None,
+        temperature: float = 0.7,
+        max_tokens: int = 2000,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """Generate chat completion using Ollama API."""
+        try:
+            if not self.base_url:
+                raise ValueError("Ollama base URL not configured")
+            
+            model = model or app_config.ollama_model
+            
+            # Convert messages to Ollama format (single prompt)
+            prompt = "\n".join([f"{msg['role']}: {msg['content']}" for msg in messages])
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self.base_url}/api/generate",
+                    json={
+                        "model": model,
+                        "prompt": prompt,
+                        "stream": False,
+                        "options": {
+                            "temperature": temperature,
+                            "num_predict": max_tokens
+                        }
+                    },
+                    timeout=aiohttp.ClientTimeout(total=60)
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return {
+                            "success": True,
+                            "content": data.get("response", ""),
+                            "model": model,
+                            "done": data.get("done", False)
+                        }
+                    else:
+                        error_text = await response.text()
+                        raise Exception(f"Ollama API returned status {response.status}: {error_text}")
+                        
+        except Exception as e:
+            logger.error(f"Ollama API error: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "content": None
+            }
+    
+    async def list_models(self) -> Dict[str, Any]:
+        """List available models in Ollama."""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{self.base_url}/api/tags",
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return {
+                            "success": True,
+                            "models": data.get("models", [])
+                        }
+                    else:
+                        error_text = await response.text()
+                        raise Exception(f"Failed to list models: {error_text}")
+                        
+        except Exception as e:
+            logger.error(f"Failed to list Ollama models: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "models": []
+            }
+    
+    async def test_connection(self) -> Dict[str, Any]:
+        """Test Ollama connection."""
+        try:
+            # First try to list models
+            models_result = await self.list_models()
+            if not models_result["success"]:
+                return {"success": False, "error": "Failed to connect to Ollama"}
+            
+            # If models available, try a simple chat completion
+            if models_result["models"]:
+                test_response = await self.chat_completion(
+                    [{"role": "user", "content": "Hello"}],
+                    max_tokens=10
+                )
+                return {
+                    "success": test_response["success"],
+                    "error": test_response.get("error"),
+                    "models_available": len(models_result["models"])
+                }
+            else:
+                return {
+                    "success": True,
+                    "error": "No models available in Ollama",
+                    "models_available": 0
+                }
+                
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+
 class APIClientManager:
     """Centralized manager for all API clients."""
     
     def __init__(self):
         self.openai = OpenAIClient()
+        self.ollama = OllamaClient()
         self.twitter = TwitterClient()
         self.telegram = TelegramClient()
         self.image_gen = ImageGenerationClient()
@@ -366,6 +486,7 @@ class APIClientManager:
         """Get a specific API client."""
         clients = {
             "openai": self.openai,
+            "ollama": self.ollama,
             "twitter": self.twitter,
             "telegram": self.telegram,
             "image_generation": self.image_gen
@@ -388,6 +509,14 @@ class APIClientManager:
         except Exception as e:
             logger.error(f"OpenAI connection test failed: {e}")
             results["openai"] = False
+        
+        # Test Ollama
+        try:
+            ollama_result = await self.ollama.test_connection()
+            results["ollama"] = ollama_result["success"]
+        except Exception as e:
+            logger.error(f"Ollama connection test failed: {e}")
+            results["ollama"] = False
         
         # Test Twitter
         try:

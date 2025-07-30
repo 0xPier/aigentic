@@ -69,8 +69,8 @@ class UserSettingsUpdate(BaseModel):
 
 
 class UserSettingsResponse(UserSettingsBase):
-    id: int
-    user_id: int
+    id: str  # Changed from int to str to handle MongoDB ObjectId
+    user_id: str  # Changed from int to str to handle MongoDB ObjectId
     created_at: datetime
     updated_at: Optional[datetime] = None
     
@@ -95,8 +95,8 @@ class ProjectUpdate(BaseModel):
 
 
 class ProjectResponse(ProjectBase):
-    id: int
-    owner_id: int
+    id: str  # Changed from int to str to handle MongoDB ObjectId
+    owner_id: str  # Changed from int to str to handle MongoDB ObjectId
     status: str
     created_at: datetime
     updated_at: Optional[datetime]
@@ -115,7 +115,7 @@ class TaskBase(BaseModel):
 
 
 class TaskCreate(TaskBase):
-    project_id: Optional[int] = None
+    project_id: Optional[str] = None  # Changed from int to str
 
 
 class TaskUpdate(BaseModel):
@@ -126,20 +126,40 @@ class TaskUpdate(BaseModel):
 
 
 class TaskResponse(TaskBase):
-    id: int
-    user_id: int
-    project_id: Optional[int]
+    id: str  # Changed from int to str to handle MongoDB ObjectId
+    user_id: str  # Changed from int to str to handle MongoDB ObjectId
+    project_id: Optional[str] = None  # Changed from int to str
     status: str
-    assigned_agent: Optional[str]
-    celery_task_id: Optional[str]
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
-    execution_time: Optional[float]
-    result_data: Optional[Dict[str, Any]]
-    output_files: Optional[List[str]]
-    error_message: Optional[str]
     created_at: datetime
     updated_at: Optional[datetime]
+    result: Optional[Dict[str, Any]] = None
+    
+    class Config:
+        from_attributes = True
+
+
+# Task execution schemas
+class TaskExecutionCreate(BaseModel):
+    task_id: str  # Changed from int to str
+    agent_name: str
+    
+
+class TaskExecutionUpdate(BaseModel):
+    task_id: str  # Changed from int to str
+    status: str
+    result: Optional[Dict[str, Any]] = None
+
+
+class TaskExecutionResponse(BaseModel):
+    id: str  # Changed from int to str to handle MongoDB ObjectId
+    user_id: str  # Changed from int to str to handle MongoDB ObjectId
+    task_id: str  # Changed from int to str
+    agent_name: str
+    status: str
+    started_at: datetime
+    completed_at: Optional[datetime] = None
+    result: Optional[Dict[str, Any]] = None
+    error_message: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -149,14 +169,14 @@ class TaskResponse(TaskBase):
 class AgentTaskRequest(BaseModel):
     query: str
     task_type: str
-    project_id: Optional[int] = None
+    project_id: Optional[str] = None  # Changed from int to str
     priority: str = "medium"
     context: Optional[Dict[str, Any]] = None
 
 
 # Agent Task Response
 class AgentTaskResponse(BaseModel):
-    task_id: int
+    task_id: str  # Changed from int to str to handle MongoDB ObjectId
     status: str
     message: str
     estimated_completion: Optional[str] = None
@@ -164,16 +184,16 @@ class AgentTaskResponse(BaseModel):
 
 # Feedback schemas
 class FeedbackCreate(BaseModel):
-    task_id: int
+    task_id: str  # Changed from int to str
     rating: int
     comment: Optional[str] = None
     feedback_type: str = "quality"
 
 
 class FeedbackResponse(BaseModel):
-    id: int
-    user_id: int
-    task_id: int
+    id: str  # Changed from int to str to handle MongoDB ObjectId
+    user_id: str  # Changed from int to str to handle MongoDB ObjectId
+    task_id: str  # Changed from int to str to handle MongoDB ObjectId
     rating: int
     comment: Optional[str]
     feedback_type: str
@@ -184,28 +204,55 @@ class FeedbackResponse(BaseModel):
 
 
 # Integration schemas
-class IntegrationCreate(BaseModel):
-    name: str  # integration type like 'openai', 'twitter', etc.
-    api_key: str
-    config: Optional[Dict[str, Any]] = {}
+class IntegrationBase(BaseModel):
+    name: str
+    service_type: str
+    config: Dict[str, Any]
+
+
+class IntegrationCreate(IntegrationBase):
+    pass
+
 
 class IntegrationUpdate(BaseModel):
     name: Optional[str] = None
-    api_key: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
     is_active: Optional[bool] = None
 
-class IntegrationResponse(BaseModel):
-    id: int
-    integration_type: str
+
+class IntegrationResponse(IntegrationBase):
+    id: str  # Changed from int to str to handle MongoDB ObjectId
+    user_id: str  # Changed from int to str to handle MongoDB ObjectId
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
     
-    # Don't expose the actual API key in responses
-    @validator('integration_type', pre=True, always=True)
-    def format_integration_type(cls, v):
-        return v
+    class Config:
+        from_attributes = True
+
+
+# Agent schemas
+class AgentBase(BaseModel):
+    name: str
+    agent_type: str
+    config: Dict[str, Any]
+
+
+class AgentCreate(AgentBase):
+    pass
+
+
+class AgentUpdate(BaseModel):
+    name: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
+    is_active: Optional[bool] = None
+
+
+class AgentResponse(AgentBase):
+    id: str  # Changed from int to str to handle MongoDB ObjectId
+    is_active: bool
+    created_at: datetime
+    last_used: Optional[datetime] = None
     
     class Config:
         from_attributes = True
@@ -213,8 +260,8 @@ class IntegrationResponse(BaseModel):
 
 # Subscription schemas
 class SubscriptionResponse(BaseModel):
-    id: int
-    user_id: int
+    id: str  # Changed from int to str to handle MongoDB ObjectId
+    user_id: str  # Changed from int to str to handle MongoDB ObjectId
     plan_name: str
     status: str
     current_period_start: Optional[datetime]
@@ -236,7 +283,7 @@ class AgentMemoryCreate(BaseModel):
 
 
 class AgentMemoryResponse(BaseModel):
-    id: int
+    id: str  # Changed from int to str to handle MongoDB ObjectId
     agent_name: str
     memory_type: str
     content: Dict[str, Any]

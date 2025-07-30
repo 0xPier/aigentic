@@ -185,19 +185,9 @@ class ResearchAgent(LLMAgent):
                 return await self._get_mock_search_results(query, max_results)
         
         async def _get_mock_search_results(self, query: str, max_results: int) -> List[Dict[str, Any]]:
-            """Fallback mock search results."""
-            return [
-                {
-                    "title": f"Research Result {i+1} for '{query}'",
-                    "url": f"https://example.com/result-{i+1}",
-                    "snippet": f"This is a mock search result snippet for query '{query}'. "
-                              f"Contains relevant information about the topic.",
-                    "source": "Mock Source",
-                    "date": datetime.now().isoformat(),
-                    "type": "mock"
-                }
-                for i in range(max_results)
-            ]
+            """Log failure and raise exception instead of returning mock data."""
+            self.logger.error(f"Web search failed for query: {query}. No fallback data available.")
+            raise Exception(f"Web search failed for query: {query}. Please check internet connection and try again.")
         
         for topic in research_plan.get("topics", []):
             try:
@@ -209,6 +199,8 @@ class ResearchAgent(LLMAgent):
                 
             except Exception as e:
                 self.logger.error(f"Research failed for topic {topic}: {e}")
+                # Don't continue with other topics if search fails
+                raise Exception(f"Research failed for topic {topic}: {e}")
         
         return results
     

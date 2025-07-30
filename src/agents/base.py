@@ -1,14 +1,12 @@
 """Base agent interface and utilities for the multi-agent system."""
 
-from abc import ABC, abstractmethod
-from typing import Dict, List, Any, Optional
-from datetime import datetime
-import logging
-import json
 import asyncio
+import logging
+from abc import ABC, abstractmethod
+from datetime import datetime
+from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 
-from ..integrations.api_client import api_manager
 from src.core.config import app_config
 from .memory_manager import memory_manager, MemoryType
 from ..database.models import AgentMemory
@@ -360,43 +358,118 @@ class BaseAgent(ABC):
 
 
 class LLMAgent(BaseAgent):
-    """Base class for agents that use LLM capabilities."""
+    """Base class for LLM-powered agents."""
     
-    def __init__(self, name: str, description: str = ""):
+    def __init__(self, name: str, description: str = "", capabilities: List[str] = None):
         super().__init__(name, description)
+        self.capabilities = capabilities or []
         self.openai_api_key = app_config.openai_api_key
         
         if not self.openai_api_key:
             self.logger.warning("OpenAI API key not configured")
     
-    async def call_llm(self, prompt: str, system_prompt: str = None, 
-                      temperature: float = 0.7, max_tokens: int = 1000) -> str:
-        """Make a call to the LLM."""
+    async def get_user_llm_settings(self, user_id) -> Dict[str, Any]:
+        """Get LLM settings for a specific user."""
         try:
-            import openai
+            from src.database.connection import mongodb
+            settings_collection = mongodb.database["user_settings"]
+            settings_doc = await settings_collection.find_one({"user_id": user_id})
             
-            if not self.openai_api_key:
-                raise ValueError("OpenAI API key not configured")
-            
-            client = openai.OpenAI(api_key=self.openai_api_key)
+            if settings_doc:
+                return {
+                    "provider": settings_doc.get("llm_provider", "openai"),
+                    "model": settings_doc.get("llm_model", "gpt-3.5-turbo"),
+                    "api_key": settings_doc.get("llm_api_key"),
+                    "api_base": settings_doc.get("llm_api_base")
+                }
+            else:
+                # Return default settings
+                return {
+                    "provider": app_config.llm_provider,
+                    "model": "gpt-3.5-turbo",
+                    "api_key": self.openai_api_key,
+                    "api_base": app_config.openai_api_base
+                }
+        except Exception as e:
+            self.logger.error(f"Failed to get user LLM settings: {e}")
+            return {
+                "provider": "openai",
+                "model": "gpt-3.5-turbo",
+                "api_key": self.openai_api_key,
+                "api_base": app_config.openai_api_base
+            }
+    
+    async def call_llm(self, prompt: str, system_prompt: str = None, 
+                      temperature: float = 0.7, max_tokens: int = 1000,
+                      user_id=None) -> str:
+        """Make a call to the LLM with provider selection."""
+        try:
+            # Get user-specific LLM settings
+            llm_settings = await self.get_user_llm_settings(user_id) if user_id else {}
+            provider = llm_settings.get("provider", "openai")
             
             messages = []
             if system_prompt:
                 messages.append({"role": "system", "content": system_prompt})
             messages.append({"role": "user", "content": prompt})
             
-            response = client.chat.completions.create(
-                model="gpt-4",
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens
-            )
-            
-            return response.choices[0].message.content
+            if provider == "openai":
+                return await self._call_openai(
+                    messages, llm_settings, temperature, max_tokens
+                )
+            elif provider == "ollama":
+                return await self._call_ollama(
+                    messages, llm_settings, temperature, max_tokens
+                )
+            else:
+                # Fallback to OpenAI
+                return await self._call_openai(
+                    messages, llm_settings, temperature, max_tokens
+                )
             
         except Exception as e:
             self.logger.error(f"LLM call failed: {e}")
             raise
+    
+    async def _call_openai(self, messages: List[Dict], settings: Dict, 
+                          temperature: float, max_tokens: int) -> str:
+        """Call OpenAI API."""
+        import openai
+        
+        api_key = settings.get("api_key") or self.openai_api_key
+        if not api_key:
+            raise ValueError("OpenAI API key not configured")
+        
+        client = openai.OpenAI(
+            api_key=api_key,
+            base_url=settings.get("api_base", app_config.openai_api_base)
+        )
+        
+        response = client.chat.completions.create(
+            model=settings.get("model", "gpt-3.5-turbo"),
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+        
+        return response.choices[0].message.content
+    
+    async def _call_ollama(self, messages: List[Dict], settings: Dict,
+                          temperature: float, max_tokens: int) -> str:
+        """Call Ollama API."""
+        from src.integrations.api_client import api_manager
+        
+        response = await api_manager.ollama.chat_completion(
+            messages=messages,
+            model=settings.get("model", app_config.ollama_model),
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+        
+        if not response["success"]:
+            raise Exception(f"Ollama API error: {response.get('error')}")
+        
+        return response["content"]
 
 
 class AgentError(Exception):

@@ -14,9 +14,8 @@ export default function Dashboard({ showGlobalError }) {
         const data = await apiCall('/dashboard/');
         setStats(data);
       } catch (error) {
-        console.error('Error fetching dashboard stats:', error);
         setError(error.message);
-        // Don't show global error for dashboard, just local error
+        // Error is now handled through the error state
       } finally {
         setLoading(false);
       }
@@ -33,8 +32,8 @@ export default function Dashboard({ showGlobalError }) {
         setStats(data);
         setError(null);
       } catch (error) {
-        console.error('Error fetching dashboard stats:', error);
         setError(error.message);
+        // Error is now handled through the error state
       } finally {
         setLoading(false);
       }

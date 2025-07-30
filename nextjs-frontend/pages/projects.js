@@ -7,19 +7,24 @@ export default function Projects() {
   const [open, setOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [isEdit, setIsEdit] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    async function fetchProjects() {
+      try {
+        setError(null);
+        const data = await apiCall('/projects/');
+        setProjects(data);
+      } catch (error) {
+        setError('Failed to load projects: ' + error.message);
+      } finally {
+        setLoading(false);
+      }
+    }
     fetchProjects();
   }, []);
-
-  const fetchProjects = async () => {
-    try {
-      const data = await apiCall('/projects');
-      setProjects(data);
-    } catch (error) {
-      console.error('Error fetching projects:', error);
-    }
-  };
 
   const handleOpen = (project = null) => {
     setSelectedProject(project);
@@ -33,27 +38,40 @@ export default function Projects() {
   };
 
   const handleSave = async () => {
+    setSaving(true);
+    setError(null);
     try {
-      const method = isEdit ? 'PUT' : 'POST';
-      const endpoint = isEdit ? `/projects/${selectedProject.id}` : '/projects';
-      await apiCall(endpoint, {
-        method,
-        body: JSON.stringify(selectedProject),
-      });
-
-      fetchProjects();
-      handleClose();
+      if (selectedProject.id) {
+        await apiCall(`/projects/${selectedProject.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(selectedProject),
+        });
+      } else {
+        await apiCall('/projects/', {
+          method: 'POST',
+          body: JSON.stringify(selectedProject),
+        });
+      }
+      // Refresh projects list
+      const data = await apiCall('/projects/');
+      setProjects(data);
+      setSelectedProject(null);
     } catch (error) {
-      console.error('Error saving project:', error);
+      setError('Failed to save project: ' + error.message);
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDelete = async (id) => {
     try {
+      setError(null);
       await apiCall(`/projects/${id}`, { method: 'DELETE' });
-      fetchProjects();
+      // Refresh projects list
+      const data = await apiCall('/projects/');
+      setProjects(data);
     } catch (error) {
-      console.error('Error deleting project:', error);
+      setError('Failed to delete project: ' + error.message);
     }
   };
 

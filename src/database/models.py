@@ -69,6 +69,13 @@ class UserSettings(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = None
 
+    @field_validator('id', 'user_id', mode='before')
+    @classmethod
+    def convert_objectid_to_str(cls, v):
+        if isinstance(v, ObjectId):
+            return str(v)
+        return v
+
     class Config:
         populate_by_name = True
         arbitrary_types_allowed = True

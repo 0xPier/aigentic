@@ -11,10 +11,9 @@ from src.agents.registry import AgentRegistry
 from src.agents.tools.file import get_file_tools
 from src.agents.tools.process import get_process_tools
 from src.agents.tools.search import get_search_tools
-from src.core.config import settings
-from src.database.connection import get_db
-from src.database.models import Task, Agent, Step
-from src.services.task_service import TaskService
+from src.core.config import app_config
+from src.database.connection import mongodb
+from src.database.models import Task
 
 
 class OrchestratorAgent(LLMAgent):
@@ -197,20 +196,19 @@ class OrchestratorAgent(LLMAgent):
     async def _create_subtask_records(self, task_id: int, subtasks: List[Dict[str, Any]]):
         """Create subtask records in the database."""
         try:
-            db = get_db()
+            subtasks_collection = mongodb.database["subtasks"]
             
             for subtask in subtasks:
-                db_subtask = SubTask(
-                    parent_task_id=task_id,
-                    agent_name=subtask["agent_type"],
-                    task_description=subtask["description"],
-                    execution_order=subtask["execution_order"],
-                    dependencies=subtask.get("dependencies", [])
-                )
-                db.add(db_subtask)
-            
-            db.commit()
-            db.close()
+                subtask_doc = {
+                    "parent_task_id": task_id,
+                    "agent_name": subtask["agent_type"],
+                    "task_description": subtask["description"],
+                    "execution_order": subtask["execution_order"],
+                    "dependencies": subtask.get("dependencies", []),
+                    "status": "pending",
+                    "created_at": datetime.utcnow()
+                }
+                await subtasks_collection.insert_one(subtask_doc)
             
         except Exception as e:
             self.logger.error(f"Failed to create subtask records: {e}")
@@ -272,20 +270,24 @@ class OrchestratorAgent(LLMAgent):
     async def _update_subtask_status(self, task_id: int, subtask_id: str, result: AgentResult):
         """Update subtask status in database."""
         try:
-            db = get_db()
+            subtasks_collection = mongodb.database["subtasks"]
             
-            subtask = db.query(SubTask).filter(
-                SubTask.parent_task_id == task_id,
-                SubTask.task_description.contains(subtask_id)  # Simple matching
-            ).first()
+            # Find the subtask by parent_task_id and subtask_id in description
+            subtask = await subtasks_collection.find_one({
+                "parent_task_id": task_id,
+                "task_description": {"$regex": subtask_id}
+            })
             
             if subtask:
-                subtask.status = "completed" if result.success else "failed"
-                subtask.result_data = result.data
-                subtask.completed_at = datetime.utcnow()
-                db.commit()
-            
-            db.close()
+                update_data = {
+                    "status": "completed" if result.success else "failed",
+                    "result_data": result.data,
+                    "completed_at": datetime.utcnow()
+                }
+                await subtasks_collection.update_one(
+                    {"_id": subtask["_id"]},
+                    {"$set": update_data}
+                )
             
         except Exception as e:
             self.logger.error(f"Failed to update subtask status: {e}")

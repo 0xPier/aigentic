@@ -1,5 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime
+import logging
 
 from src.api.dependencies import get_default_user
 from src.api.schemas import UserSettingsResponse, UserSettingsUpdate, UserSettingsCreate
@@ -7,6 +9,7 @@ from src.database.connection import mongodb
 from src.database.models import User, UserSettings, PyObjectId
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/", response_model=UserSettingsResponse)
@@ -15,7 +18,7 @@ async def get_user_settings(
 ):
     """Get current user's settings."""
     settings_collection = mongodb.database["user_settings"]
-    settings_doc = settings_collection.find_one({"user_id": current_user.id})
+    settings_doc = await settings_collection.find_one({"user_id": current_user.id})
     
     if not settings_doc:
         # Create default settings if none exist
@@ -34,10 +37,46 @@ async def get_user_settings(
         )
         result = await settings_collection.insert_one(settings.model_dump(by_alias=True, exclude_none=True))
         settings.id = result.inserted_id
+        
+        # Convert to response model with string IDs
+        return UserSettingsResponse(
+            id=str(settings.id),
+            user_id=str(settings.user_id),
+            llm_provider=settings.llm_provider,
+            llm_api_key=settings.llm_api_key,
+            llm_api_base=settings.llm_api_base,
+            llm_model=settings.llm_model,
+            theme=settings.theme,
+            language=settings.language,
+            timezone=settings.timezone,
+            email_notifications=settings.email_notifications,
+            task_completion_notifications=settings.task_completion_notifications,
+            project_updates_notifications=settings.project_updates_notifications,
+            auto_save_interval=settings.auto_save_interval,
+            max_concurrent_tasks=settings.max_concurrent_tasks,
+            created_at=settings.created_at,
+            updated_at=settings.updated_at
+        )
     else:
-        settings = UserSettings(**settings_doc)
-    
-    return settings
+        # Convert to response model with string IDs
+        return UserSettingsResponse(
+            id=str(settings_doc["_id"]),
+            user_id=str(settings_doc["user_id"]),
+            llm_provider=settings_doc.get("llm_provider", "openai"),
+            llm_api_key=settings_doc.get("llm_api_key"),
+            llm_api_base=settings_doc.get("llm_api_base"),
+            llm_model=settings_doc.get("llm_model", "gpt-3.5-turbo"),
+            theme=settings_doc.get("theme", "light"),
+            language=settings_doc.get("language", "en"),
+            timezone=settings_doc.get("timezone", "UTC"),
+            email_notifications=settings_doc.get("email_notifications", True),
+            task_completion_notifications=settings_doc.get("task_completion_notifications", True),
+            project_updates_notifications=settings_doc.get("project_updates_notifications", True),
+            auto_save_interval=settings_doc.get("auto_save_interval", 30),
+            max_concurrent_tasks=settings_doc.get("max_concurrent_tasks", 3),
+            created_at=settings_doc["created_at"],
+            updated_at=settings_doc.get("updated_at")
+        )
 
 
 @router.put("/", response_model=UserSettingsResponse)
@@ -48,7 +87,7 @@ async def update_user_settings(
     """Update current user's settings."""
     settings_collection = mongodb.database["user_settings"]
     
-    existing_settings = settings_collection.find_one({"user_id": current_user.id})
+    existing_settings = await settings_collection.find_one({"user_id": current_user.id})
     
     if not existing_settings:
         # Create new settings if none exist
@@ -65,7 +104,7 @@ async def update_user_settings(
         {"$set": update_data}
     )
     
-    updated_settings_doc = settings_collection.find_one({"user_id": current_user.id})
+    updated_settings_doc = await settings_collection.find_one({"user_id": current_user.id})
     return UserSettings(**updated_settings_doc)
 
 
@@ -76,7 +115,7 @@ async def create_user_settings(
 ):
     """Create user settings (if they don't exist)."""
     settings_collection = mongodb.database["user_settings"]
-    existing_settings = settings_collection.find_one({"user_id": current_user.id})
+    existing_settings = await settings_collection.find_one({"user_id": current_user.id})
     
     if existing_settings:
         raise HTTPException(
@@ -117,7 +156,7 @@ async def get_llm_config(
 ):
     """Get LLM configuration for the current user."""
     settings_collection = mongodb.database["user_settings"]
-    settings_doc = settings_collection.find_one({"user_id": current_user.id})
+    settings_doc = await settings_collection.find_one({"user_id": current_user.id})
     
     if not settings_doc:
         # Return default configuration
@@ -144,7 +183,7 @@ async def test_llm_connection(
 ):
     """Test the LLM connection with current settings."""
     settings_collection = mongodb.database["user_settings"]
-    settings_doc = settings_collection.find_one({"user_id": current_user.id})
+    settings_doc = await settings_collection.find_one({"user_id": current_user.id})
     
     if not settings_doc:
         raise HTTPException(
@@ -202,4 +241,47 @@ async def test_llm_connection(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Connection failed: {str(e)}"
+        )
+
+
+@router.post("/test-integrations")
+async def test_all_integrations(
+    current_user: User = Depends(get_default_user),
+):
+    """Test all integration connections."""
+    try:
+        from src.integrations.api_client import api_manager
+        
+        # Test all connections
+        results = await api_manager.test_connections()
+        
+        # Add more detailed testing
+        detailed_results = {}
+        
+        for service, success in results.items():
+            detailed_results[service] = {
+                "success": success,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            
+            # Add additional details for specific services
+            if service == "ollama" and success:
+                try:
+                    models_result = await api_manager.ollama.list_models()
+                    detailed_results[service]["models_available"] = len(models_result.get("models", []))
+                    detailed_results[service]["models"] = [m.get("name", "unknown") for m in models_result.get("models", [])]
+                except Exception as e:
+                    detailed_results[service]["models_error"] = str(e)
+        
+        return {
+            "status": "completed",
+            "results": detailed_results,
+            "overall_health": all(results.values())
+        }
+        
+    except Exception as e:
+        logger.error(f"Integration test failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Integration test failed: {str(e)}"
         )

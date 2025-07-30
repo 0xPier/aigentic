@@ -4,8 +4,8 @@ import { useRouter } from 'next/router';
 export default function Home() {
   const router = useRouter();
 
-  const handleNavigation = (path) => {
-    console.log('Navigating to:', path);
+  const navigate = (path) => {
+    // Navigate to the specified path
     router.push(path);
   };
 
@@ -41,7 +41,7 @@ export default function Home() {
                 variant="contained" 
                 color="primary"
                 fullWidth
-                onClick={() => handleNavigation('/tasks')}
+                onClick={() => navigate('/tasks')}
               >
                 View Tasks
               </Button>
@@ -71,7 +71,7 @@ export default function Home() {
                 variant="contained" 
                 color="primary"
                 fullWidth
-                onClick={() => handleNavigation('/agents')}
+                onClick={() => navigate('/agents')}
               >
                 View Agents
               </Button>
@@ -101,7 +101,7 @@ export default function Home() {
                 variant="contained" 
                 color="primary"
                 fullWidth
-                onClick={() => handleNavigation('/projects')}
+                onClick={() => navigate('/projects')}
               >
                 View Projects
               </Button>
@@ -131,7 +131,7 @@ export default function Home() {
                 variant="contained" 
                 color="primary"
                 fullWidth
-                onClick={() => handleNavigation('/integrations')}
+                onClick={() => navigate('/integrations')}
               >
                 View Integrations
               </Button>
@@ -161,7 +161,7 @@ export default function Home() {
                 variant="contained" 
                 color="primary"
                 fullWidth
-                onClick={() => handleNavigation('/settings')}
+                onClick={() => navigate('/settings')}
               >
                 View Settings
               </Button>

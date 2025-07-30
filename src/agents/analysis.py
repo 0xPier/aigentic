@@ -130,22 +130,15 @@ class AnalysisAgent(LLMAgent):
             }
     
     def _get_analysis_data(self, context: AgentContext) -> Any:
-        """Get data for analysis from context or generate sample data."""
+        """Get data for analysis from context."""
         # Check if previous results contain data
         if context.previous_results:
             for result in context.previous_results.values():
                 if result.get("success") and "data" in result:
                     return result["data"]
         
-        # Generate sample data for demonstration
-        np.random.seed(42)
-        sample_data = {
-            "values": np.random.normal(100, 15, 1000).tolist(),
-            "categories": np.random.choice(['A', 'B', 'C'], 1000).tolist(),
-            "dates": pd.date_range('2024-01-01', periods=1000, freq='D').strftime('%Y-%m-%d').tolist()
-        }
-        
-        return sample_data
+        # No data available for analysis
+        raise ValueError("No data available for analysis. Please provide data through previous agent results or context.")
     
     async def _perform_analysis(self, data: Any, spec: Dict[str, Any]) -> Dict[str, Any]:
         """Perform the actual data analysis."""

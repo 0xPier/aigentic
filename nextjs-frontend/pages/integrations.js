@@ -7,24 +7,30 @@ export default function Integrations() {
   const [open, setOpen] = useState(false);
   const [formData, setFormData] = useState({});
   const [isEdit, setIsEdit] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [editingIntegration, setEditingIntegration] = useState(null);
 
   useEffect(() => {
+    async function fetchIntegrations() {
+      try {
+        setError(null);
+        const data = await apiCall('/integrations/');
+        setIntegrations(data);
+      } catch (error) {
+        setError('Failed to load integrations: ' + error.message);
+      } finally {
+        setLoading(false);
+      }
+    }
     fetchIntegrations();
   }, []);
-
-  const fetchIntegrations = async () => {
-    try {
-      const data = await apiCall('/integrations');
-      setIntegrations(data);
-    } catch (error) {
-      console.error('Error fetching integrations:', error);
-    }
-  };
 
   const handleOpen = (integration = null) => {
     if (integration) {
       setIsEdit(true);
-      setFormData({
+      setEditingIntegration({
         id: integration.id,
         name: integration.integration_type, // Map API response field to form field
         api_key: '', // Do not expose existing key
@@ -32,51 +38,63 @@ export default function Integrations() {
       });
     } else {
       setIsEdit(false);
-      setFormData({ name: '', api_key: '', is_active: true });
+      setEditingIntegration({ name: '', api_key: '', is_active: true });
     }
     setOpen(true);
   };
 
   const handleClose = () => {
     setOpen(false);
-    setFormData({});
+    setEditingIntegration(null);
   };
 
   const handleSave = async () => {
+    setSaving(true);
+    setError(null);
     try {
-      const { id, ...data } = formData;
+      const saveData = { ...editingIntegration };
       // For edits, don't send an empty api_key if the user didn't enter a new one
-      if (isEdit && !data.api_key) {
-        delete data.api_key;
+      if (editingIntegration.id && !saveData.api_key) {
+        delete saveData.api_key;
       }
-
-      const method = isEdit ? 'PUT' : 'POST';
-      const endpoint = isEdit ? `/integrations/${id}` : '/integrations';
       
-      await apiCall(endpoint, {
-        method,
-        body: JSON.stringify(data),
-      });
-
-      fetchIntegrations();
-      handleClose();
+      if (editingIntegration.id) {
+        await apiCall(`/integrations/${editingIntegration.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(saveData),
+        });
+      } else {
+        await apiCall('/integrations/', {
+          method: 'POST',
+          body: JSON.stringify(saveData),
+        });
+      }
+      // Refresh integrations list
+      const data = await apiCall('/integrations/');
+      setIntegrations(data);
+      setEditingIntegration(null);
     } catch (error) {
-      console.error('Error saving integration:', error);
+      setError('Failed to save integration: ' + error.message);
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDelete = async (id) => {
     try {
+      setError(null);
       await apiCall(`/integrations/${id}`, { method: 'DELETE' });
-      fetchIntegrations();
+      // Refresh integrations list
+      const data = await apiCall('/integrations/');
+      setIntegrations(data);
     } catch (error) {
-      console.error('Error deleting integration:', error);
+      setError('Failed to delete integration: ' + error.message);
     }
   };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData({ ...formData, [name]: type === 'checkbox' ? checked : value });
+    setEditingIntegration({ ...editingIntegration, [name]: type === 'checkbox' ? checked : value });
   };
 
   return (
@@ -110,13 +128,13 @@ export default function Integrations() {
       <Dialog open={open} onClose={handleClose}>
         <DialogTitle>{isEdit ? 'Edit Integration' : 'New Integration'}</DialogTitle>
         <DialogContent>
-          <TextField autoFocus margin="dense" name="name" label="Name" type="text" fullWidth value={formData?.name || ''} onChange={handleChange} />
-          <TextField margin="dense" name="api_key" label="API Key" type="password" fullWidth value={formData?.api_key || ''} onChange={handleChange} placeholder={isEdit ? "Leave blank to keep existing key" : ""} />
-          <FormControlLabel control={<Switch name="is_active" checked={formData?.is_active || false} onChange={handleChange} />} label="Active" />
+          <TextField autoFocus margin="dense" name="name" label="Name" type="text" fullWidth value={editingIntegration?.name || ''} onChange={handleChange} />
+          <TextField margin="dense" name="api_key" label="API Key" type="password" fullWidth value={editingIntegration?.api_key || ''} onChange={handleChange} placeholder={isEdit ? "Leave blank to keep existing key" : ""} />
+          <FormControlLabel control={<Switch name="is_active" checked={editingIntegration?.is_active || false} onChange={handleChange} />} label="Active" />
         </DialogContent>
         <DialogActions>
           <Button onClick={handleClose}>Cancel</Button>
-          <Button onClick={handleSave}>Save</Button>
+          <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
         </DialogActions>
       </Dialog>
     </Box>

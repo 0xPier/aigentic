@@ -2,6 +2,9 @@
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
-};
+  experimental: {
+    outputFileTracingRoot: undefined,
+  },
+}
 
-module.exports = nextConfig;
+module.exports = nextConfig

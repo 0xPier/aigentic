@@ -49,9 +49,26 @@ class Settings(BaseSettings):
     stability_api_key: str = config("STABILITY_API_KEY", default="")
     huggingface_api_key: str = config("HUGGINGFACE_API_KEY", default="")
     
-    # Redis & Celery
+    # JWT Configuration  
+    algorithm: str = config("ALGORITHM", default="HS256")
+    access_token_expire_minutes: int = config("ACCESS_TOKEN_EXPIRE_MINUTES", default=1440, cast=int)
+    refresh_token_expire_days: int = config("REFRESH_TOKEN_EXPIRE_DAYS", default=7, cast=int)
+    
+    # Redis Configuration
     redis_url: str = config("REDIS_URL", default="redis://localhost:6379/0")
-
+    
+    # Celery Configuration
+    celery_broker_url: str = config("CELERY_BROKER_URL", default="redis://localhost:6379/0")
+    celery_result_backend: str = config("CELERY_RESULT_BACKEND", default="redis://localhost:6379/0")
+    
+    # Storage Configuration
+    upload_dir: str = config("UPLOAD_DIR", default="./uploads")
+    max_upload_size: int = config("MAX_UPLOAD_SIZE", default=10485760, cast=int)  # 10MB
+    
+    # Logging Configuration
+    log_level: str = config("LOG_LEVEL", default="INFO")
+    log_file: str = config("LOG_FILE", default="./logs/app.log")
+    
     # CORS
     allowed_origins: Optional[str] = config("ALLOWED_ORIGINS", default="http://localhost:3000,http://127.0.0.1:3000")
     
@@ -59,10 +76,6 @@ class Settings(BaseSettings):
     debug: bool = config("DEBUG", default=True, cast=bool)
     api_host: str = config("API_HOST", default="0.0.0.0")
     api_port: int = config("API_PORT", default=8000, cast=int)
-    
-    # File Upload
-    upload_dir: str = config("UPLOAD_DIR", default="./uploads")
-    max_file_size: int = config("MAX_FILE_SIZE", default=10485760, cast=int)  # 10MB
     
     # Subscription & Billing
     stripe_secret_key: str = config("STRIPE_SECRET_KEY", default="")
@@ -81,47 +94,37 @@ class Settings(BaseSettings):
         env_file = ".env"
         extra = "allow"  # Allow extra fields from environment
     
-    def __post_init__(self):
-        """Validate critical environment variables after initialization."""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self._validate_environment()
     
     def _validate_environment(self):
-        """Validate critical environment variables and log warnings for missing ones."""
-        critical_vars = {
-            'DATABASE_URL': self.database_url,
-            'REDIS_URL': self.redis_url
-        }
+        """Validate environment configuration."""
+        # Check if running in production
+        if self.environment == "production":
+            # Warn about missing production configurations
+            missing_configs = []
+            
+            if not self.openai_api_key and self.llm_provider == "openai":
+                missing_configs.append("OPENAI_API_KEY")
+            
+            if self.secret_key == "your-secret-key-change-in-production":
+                missing_configs.append("SECRET_KEY (using default)")
+            
+            if missing_configs:
+                logger.warning(f"Production environment detected but missing configurations: {', '.join(missing_configs)}")
         
-        # For self-hosted setup, SECRET_KEY is less critical - generate a default if needed
-        if not self.secret_key or self.secret_key in ['your-secret-key-change-in-production']:
-            logger.info("Using default secret key for self-hosted setup")
+        # Validate database URL
+        if not self.database_url:
+            logger.error("DATABASE_URL is required")
+            raise ValueError("DATABASE_URL configuration is required")
         
-        optional_vars = {
-            'OPENAI_API_KEY': self.openai_api_key,
-            'TWITTER_API_KEY': self.twitter_api_key,
-            'TELEGRAM_BOT_TOKEN': self.telegram_bot_token,
-            'STABILITY_API_KEY': self.stability_api_key,
-            'STRIPE_SECRET_KEY': self.stripe_secret_key,
-            'SMTP_USER': self.smtp_user
-        }
+        # Log configuration summary
+        logger.info(f"Environment: {self.environment}")
+        logger.info(f"Database: {self.database_url}")
+        logger.info(f"LLM Provider: {self.llm_provider}")
         
-        # Check critical variables (removed SECRET_KEY for self-hosted)
-        for var_name, var_value in critical_vars.items():
-            if not var_value:
-                logger.warning(f"Environment variable {var_name} is not set - some features may not work")
-        
-        # Check optional variables
-        missing_optional = []
-        for var_name, var_value in optional_vars.items():
-            if not var_value:
-                missing_optional.append(var_name)
-        
-        # Relaxed validation for self-hosted setup
-        if self.llm_provider == "openai" and not self.openai_api_key:
-            logger.warning("OPENAI_API_KEY is not set - OpenAI features will not work.")
-
-        if missing_optional:
-            logger.info(f"Optional environment variables not set: {', '.join(missing_optional)}")
+        if self.environment == "development":
             logger.info("Some features may be limited without these API keys - this is normal for self-hosted setups")
     
     def get_llm_config(self):

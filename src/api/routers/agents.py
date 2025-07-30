@@ -11,6 +11,55 @@ from src.agents.registry import AgentRegistry
 router = APIRouter()
 
 
+@router.get("/")
+async def get_agents(
+    current_user: User = Depends(get_default_user),
+):
+    """Get list of all agents and their basic information."""
+    registry = AgentRegistry()
+    agents = registry.get_all_agents()
+    
+    # Get performance data for each agent
+    task_collection = mongodb.database["tasks"]
+    agent_stats_pipeline = [
+        {"$match": {"user_id": current_user.id, "assigned_agent": {"$ne": None}}},
+        {"$group": {
+            "_id": "$assigned_agent",
+            "total_tasks": {"$sum": 1},
+            "completed_tasks": {"$sum": {"$cond": [{"$eq": ["$status", "completed"]}, 1, 0]}},
+            "failed_tasks": {"$sum": {"$cond": [{"$eq": ["$status", "failed"]}, 1, 0]}},
+        }}
+    ]
+    
+    agent_stats_cursor = task_collection.aggregate(agent_stats_pipeline)
+    performance_data = {}
+    async for stat in agent_stats_cursor:
+        agent_name = stat["_id"]
+        performance_data[agent_name] = {
+            "total_tasks": stat["total_tasks"],
+            "completed_tasks": stat["completed_tasks"],
+            "failed_tasks": stat["failed_tasks"],
+            "success_rate": (stat["completed_tasks"] / stat["total_tasks"] * 100) if stat["total_tasks"] > 0 else 0
+        }
+    
+    # Combine agent info with performance data
+    result = []
+    for agent_name, agent_info in agents.items():
+        agent_data = {
+            "name": agent_name,
+            "info": agent_info,
+            "performance": performance_data.get(agent_name, {
+                "total_tasks": 0,
+                "completed_tasks": 0,
+                "failed_tasks": 0,
+                "success_rate": 0
+            })
+        }
+        result.append(agent_data)
+    
+    return result
+
+
 @router.get("/available")
 async def get_available_agents():
     """Get list of available agents and their capabilities."""
@@ -115,4 +164,4 @@ async def get_agent_performance(
             "success_rate": success_rate
         })
 
-    return {"agent_performance": performance_data}
+    return performance_data

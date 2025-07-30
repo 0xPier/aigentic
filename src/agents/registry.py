@@ -2,6 +2,7 @@
 
 from typing import Dict, List, Optional, Type
 from src.agents.base import BaseAgent
+import logging
 
 
 class AgentRegistry:
@@ -42,16 +43,17 @@ class AgentRegistry:
             OrchestratorAgent
         ]
         
+        logger = logging.getLogger(__name__)
+        logging.basicConfig(level=logging.INFO)
+
         for agent_class in agent_classes:
             try:
                 agent_instance = agent_class()
                 self._agents[agent_instance.name] = agent_instance
                 self._agent_classes[agent_instance.name] = agent_class
+                logger.info(f"Successfully initialized agent {agent_class.__name__}")
             except Exception as e:
-                print(f"Failed to initialize agent {agent_class.__name__}: {e}")
-                # Log the error and continue with other agents
-                import logging
-                logging.error(f"Failed to initialize agent {agent_class.__name__}: {e}")
+                logger.error(f"Failed to initialize agent {agent_class.__name__}: {e}")
     
     def get_agent(self, agent_name: str) -> Optional[BaseAgent]:
         """Get an agent instance by name."""

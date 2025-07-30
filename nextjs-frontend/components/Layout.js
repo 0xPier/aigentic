@@ -17,7 +17,7 @@ export default function Layout({ children }) {
   const router = useRouter();
 
   const handleNavigation = (path) => {
-    console.log('Navigating to:', path);
+    // Navigation logic without console logging
     router.push(path);
   };
 
